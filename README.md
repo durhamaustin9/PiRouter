@@ -14,6 +14,13 @@ At a glance, the dashboard shows:
 
 Card titles open touch-friendly explanations of each reading. The header and bottom navigation stay fixed over scrolling content, and Focus mode hides both bars while leaving a one-tap restore control visible.
 
+## Hardware used
+
+- Raspberry Pi 5 with 16 GB RAM
+- Official Raspberry Pi 7-inch Touch Display
+- NUO8 bottom-mounted USB storage adapter for Raspberry Pi 5
+- 1 TB 2.5-inch SSD
+
 ## Privacy model
 
 PiRouter is intended to run on a trusted local network or tailnet. Status, history, hostnames, and backup information remain on the device; the application does not send telemetry to a hosted service.
