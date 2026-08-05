@@ -1,0 +1,10 @@
+[Unit]
+Description=Verify and compact secondary Time Machine history
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/pirouter-archive-backup maintenance
+Nice=19
+IOSchedulingClass=idle

@@ -1,0 +1,261 @@
+.dashboardShell {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 45% -20%, rgba(56, 176, 139, 0.12), transparent 42%),
+    linear-gradient(155deg, #07100e 0%, #091310 50%, #050b09 100%);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+}
+
+.topBar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: var(--header-height);
+  padding: 8px 14px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(4, 10, 8, 0.96);
+  z-index: 30;
+  transition: transform 180ms ease, opacity 140ms ease;
+}
+
+.brandBlock,
+.topActions,
+.globalState,
+.connectionBanner {
+  display: flex;
+  align-items: center;
+}
+
+.brandBlock {
+  gap: 10px;
+  min-width: 0;
+}
+
+.brandBlock > span:last-child,
+.clockBlock {
+  display: grid;
+}
+
+.brandBlock strong {
+  font-size: 17px;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.brandBlock small,
+.clockBlock small {
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.brandMark {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(85, 229, 176, 0.22);
+  border-radius: 12px;
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+.globalState {
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.globalState.healthy { color: var(--good); }
+.globalState.warning { color: var(--warn); }
+.globalState.critical { color: var(--danger); }
+.globalState.unconfigured,
+.globalState.unavailable { color: #b7c8c2; }
+
+.stateDot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  box-shadow: 0 0 9px currentColor;
+}
+
+.topActions {
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+.clockBlock {
+  margin-right: 7px;
+  text-align: right;
+}
+
+.clockBlock strong {
+  font-size: 17px;
+  line-height: 1.1;
+}
+
+.topActions .mantine-ActionIcon-root {
+  width: 42px;
+  height: 42px;
+  color: #bad0c8;
+}
+
+.dashboardMain {
+  position: fixed;
+  top: var(--header-height);
+  right: 0;
+  bottom: var(--nav-height);
+  left: 0;
+  overflow-y: auto;
+  padding: 10px 12px 12px;
+  overscroll-behavior-y: contain;
+  scrollbar-width: none;
+  touch-action: none;
+  -webkit-overflow-scrolling: touch;
+  transition: top 180ms ease, bottom 180ms ease;
+}
+
+.dashboardMain::-webkit-scrollbar {
+  display: none;
+}
+
+.bottomNav {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: var(--nav-height);
+  padding: 4px max(8px, env(safe-area-inset-right))
+    max(4px, env(safe-area-inset-bottom));
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 3px;
+  border-top: 1px solid var(--line);
+  background: rgba(4, 10, 8, 0.98);
+  z-index: 30;
+  transition: transform 180ms ease, opacity 140ms ease;
+}
+
+.bottomNav button {
+  min-height: 48px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 3px;
+  border-radius: 12px;
+  color: #78938a;
+  transition: color 140ms ease, background 140ms ease;
+}
+
+.bottomNav button svg { font-size: 14px; }
+.bottomNav button span { font-size: 9px; font-weight: 700; }
+.bottomNav button.active { color: var(--good); background: var(--good-soft); }
+
+.bottomNav .focusModeButton {
+  position: relative;
+  color: #a8bdb6;
+}
+
+.bottomNav .focusModeButton::before {
+  content: "";
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: -2px;
+  width: 1px;
+  background: var(--line);
+}
+
+.focusModeAction {
+  color: var(--good) !important;
+}
+
+.focusMode .topBar {
+  transform: translateY(-100%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.focusMode .bottomNav {
+  transform: translateY(100%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.focusMode .dashboardMain {
+  top: 0;
+  bottom: 0;
+}
+
+.chromeRestoreButton {
+  position: fixed;
+  top: max(10px, env(safe-area-inset-top));
+  right: max(10px, env(safe-area-inset-right));
+  z-index: 50;
+  min-height: 40px;
+  padding: 0 13px 0 11px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(85, 229, 176, 0.28);
+  border-radius: 12px;
+  background: rgba(4, 10, 8, 0.94);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.34);
+  color: var(--good);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+}
+
+.chromeRestoreButton:active {
+  background: #12231e;
+  transform: translateY(1px);
+}
+
+.chromeRestoreButton:focus-visible {
+  outline: 2px solid var(--good);
+  outline-offset: 2px;
+}
+
+.chromeRestoreButton svg {
+  font-size: 12px;
+}
+
+.connectionBanner {
+  position: fixed;
+  z-index: 40;
+  left: 50%;
+  top: var(--header-height);
+  transform: translateX(-50%);
+  gap: 7px;
+  padding: 6px 12px;
+  border-radius: 0 0 10px 10px;
+  background: #6f331f;
+  color: #ffe0d3;
+  font-size: 10px;
+  transition: top 180ms ease;
+}
+
+.focusMode .connectionBanner {
+  top: 0;
+}

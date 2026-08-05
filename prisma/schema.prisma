@@ -1,0 +1,26 @@
+generator client {
+  provider = "prisma-client"
+  output   = "./generated"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model HealthSnapshot {
+  id            Int      @id @default(autoincrement())
+  capturedAt    DateTime @default(now())
+  downloadBps   Float
+  uploadBps     Float
+  latencyMs     Float?
+  packetLossPct Float?
+  cpuTempC      Float?
+  cpuLoadPct    Float
+  memoryPct     Float
+  diskPct       Float
+  tailscaleUp   Boolean
+  endpointReachable Boolean?
+  timeMachineOk Boolean?
+
+  @@index([capturedAt])
+}
