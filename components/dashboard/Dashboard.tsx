@@ -105,6 +105,7 @@ export function Dashboard() {
             history={controller.history}
             onSpeedTest={() => void controller.runSpeedTest()}
             speedTestJob={controller.speedTestJob}
+            speedTestStarting={controller.speedTestStarting}
             onShowDetails={setComponentDetailId}
           />
         )}
@@ -139,6 +140,7 @@ export function Dashboard() {
       <SpeedTestModal
         opened={controller.speedModalOpen}
         job={controller.speedTestJob}
+        starting={controller.speedTestStarting}
         onRun={() => void controller.runSpeedTest()}
         onClose={() => controller.setSpeedModalOpen(false)}
       />

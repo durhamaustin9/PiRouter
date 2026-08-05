@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ActionIcon,
   Button,
+  Loader,
   Modal,
   Progress,
   Tooltip,
@@ -194,11 +195,13 @@ export function DashboardChromeRestore({
 export function SpeedTestModal({
   opened,
   job,
+  starting,
   onRun,
   onClose,
 }: {
   opened: boolean;
   job: SpeedTestJobStatus;
+  starting: boolean;
   onRun: () => void;
   onClose: () => void;
 }) {
@@ -221,7 +224,19 @@ export function SpeedTestModal({
       closeButtonProps={{ "aria-label": "Close speed test" }}
       classNames={{ content: "speedModal", header: "speedModalHeader" }}
     >
-      {job.state === "running" ? (
+      {starting ? (
+        <div
+          className="speedLoading speedStarting"
+          role="status"
+          aria-live="assertive"
+          aria-busy="true"
+        >
+          <Loader color="teal" size="lg" type="bars" />
+          <strong>Starting speed test</strong>
+          <p>Contacting the local speed-test service…</p>
+          <small>The controls are locked until the test responds.</small>
+        </div>
+      ) : job.state === "running" ? (
         <div className="speedProgress" role="status" aria-live="polite">
           <div className="speedProgressHead">
             <div>

@@ -51,6 +51,7 @@ export function useDashboardController() {
   const [speedTestJob, setSpeedTestJob] = useState<SpeedTestJobStatus>(
     INITIAL_SPEED_TEST_JOB,
   );
+  const [speedTestStarting, setSpeedTestStarting] = useState(false);
   const [speedModalOpen, setSpeedModalOpen] = useState(false);
   const [portableExportStarting, setPortableExportStarting] = useState(false);
   const [portableExportError, setPortableExportError] = useState<string | null>(null);
@@ -174,11 +175,13 @@ export function useDashboardController() {
       return speedStartInFlightRef.current;
     }
 
+    setSpeedTestStarting(true);
+
     const request = (async () => {
       try {
         const response = await fetchJson<SpeedTestStartResponse>(
           "/api/speedtest",
-          { method: "POST" },
+          { method: "POST", signal: AbortSignal.timeout(15_000) },
         );
         if (mountedRef.current) setSpeedTestJob(response.job);
       } catch (requestError) {
@@ -198,6 +201,7 @@ export function useDashboardController() {
       }
     })().finally(() => {
       speedStartInFlightRef.current = null;
+      if (mountedRef.current) setSpeedTestStarting(false);
     });
 
     speedStartInFlightRef.current = request;
@@ -235,6 +239,7 @@ export function useDashboardController() {
     error,
     loadStatus,
     speedTestJob,
+    speedTestStarting,
     speedModalOpen,
     setSpeedModalOpen,
     runSpeedTest,

@@ -22,16 +22,19 @@ export function NetworkView({
   history,
   onSpeedTest,
   speedTestJob,
+  speedTestStarting,
   onShowDetails,
 }: {
   status: PiStatus;
   history: HistoryPoint[];
   onSpeedTest: () => void;
   speedTestJob: SpeedTestJobStatus;
+  speedTestStarting: boolean;
   onShowDetails: (id: ComponentDetailId) => void;
 }) {
   const networkLevel = status.network.online ? "healthy" : "critical";
   const speedTesting = speedTestJob.state === "running";
+  const speedTestActive = speedTestStarting || speedTesting;
   const speedResult = speedTestJob.result;
 
   return (
@@ -114,9 +117,9 @@ export function NetworkView({
           </div>
         </div>
         <Button
-          className="speedButton"
+          className={`speedButton${speedTestActive ? " isActive" : ""}`}
           leftSection={
-            speedTesting ? (
+            speedTestActive ? (
               <Loader size={12} color="currentColor" />
             ) : (
               <FontAwesomeIcon icon={faBolt} fixedWidth />
@@ -125,18 +128,40 @@ export function NetworkView({
           onClick={onSpeedTest}
           color="teal"
           fullWidth
+          aria-busy={speedTestActive}
         >
-          {speedTesting ? "View running test" : "Run speed test"}
+          {speedTestStarting
+            ? "Starting speed test…"
+            : speedTesting
+              ? `Testing · ${speedTestJob.progressPct}%`
+              : "Run speed test"}
         </Button>
-        <p className="panelFoot speedResultFoot" aria-live="polite">
-          {speedTesting
-            ? `${speedTestJob.message} · ${speedTestJob.elapsedSeconds}s`
-            : speedResult
-              ? `Last: ${speedResult.downloadMbps}↓ / ${speedResult.uploadMbps}↑ Mbps`
-              : speedTestJob.state === "error"
-                ? "Last test failed · Tap to retry"
-                : "On-demand · Uses your internet connection"}
-        </p>
+        <div
+          className={`speedInlineStatus${speedTestActive ? " isActive" : ""}`}
+          role="status"
+          aria-live="polite"
+        >
+          {speedTestActive && (
+            <div className="speedInlineTrack" aria-hidden="true">
+              <i
+                style={{
+                  width: `${speedTestStarting ? 4 : speedTestJob.progressPct}%`,
+                }}
+              />
+            </div>
+          )}
+          <p className="panelFoot speedResultFoot">
+            {speedTestStarting
+              ? "Contacting the local speed-test service"
+              : speedTesting
+                ? `${speedTestJob.message} · ${speedTestJob.elapsedSeconds}s`
+                : speedResult
+                  ? `Last: ${speedResult.downloadMbps}↓ / ${speedResult.uploadMbps}↑ Mbps`
+                  : speedTestJob.state === "error"
+                    ? "Last test failed · Tap to retry"
+                    : "On-demand · Uses your internet connection"}
+          </p>
+        </div>
       </Panel>
     </section>
   );
