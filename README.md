@@ -9,7 +9,7 @@ At a glance, the dashboard shows:
 - an optional, configurable TCP service-endpoint check;
 - Tailscale state and peer counts;
 - CPU load, temperature, memory, storage, and uptime;
-- encrypted secondary snapshots of an idle Time Machine share;
+- browsable, timestamped exports of completed Time Machine snapshots;
 - an operator-triggered Ookla speed test with progress reporting.
 
 Card titles open touch-friendly explanations of each reading. The header and bottom navigation stay fixed over scrolling content, and Focus mode hides both bars while leaving a one-tap restore control visible.
@@ -18,7 +18,7 @@ Card titles open touch-friendly explanations of each reading. The header and bot
 
 PiRouter is intended to run on a trusted local network or tailnet. Status, history, hostnames, and backup information remain on the device; the application does not send telemetry to a hosted service.
 
-Keep `.env`, SQLite data, SMB credentials, Restic passwords, and operator notes outside Git. The included crawler policy blocks the live dashboard and API surface, but it is not a substitute for network access controls. Do not expose the dashboard directly to the public internet.
+Keep `.env`, SQLite data, SSH keys, pairing tokens, and operator notes outside Git. The included crawler policy blocks the live dashboard and API surface, but it is not a substitute for network access controls. Do not expose the dashboard directly to the public internet.
 
 ## Stack
 
@@ -28,7 +28,7 @@ Keep `.env`, SQLite data, SMB credentials, Restic passwords, and operator notes 
 - Tailscale CLI integration
 - Raspberry Pi OS and Linux telemetry
 - Samba-aware Time Machine activity detection
-- Restic secondary snapshots
+- macOS-assisted portable Time Machine exports
 
 ## Develop locally
 
@@ -57,7 +57,12 @@ ENDPOINT_PORT="443"
 
 TIME_MACHINE_PATH="/srv/timemachine"
 TIME_MACHINE_SERVICE="smbd"
+TIME_MACHINE_ACTIVE_WINDOW_MINUTES="3"
 TIME_MACHINE_STALE_HOURS="36"
+
+PORTABLE_EXPORT_TOKEN="replace-with-a-random-64-character-hex-token"
+PORTABLE_EXPORT_AUTOMATIC="true"
+PORTABLE_EXPORT_STATUS_PATH="./data/portable-export.json"
 ```
 
 The endpoint monitor performs only a TCP connection handshake. Leave `ENDPOINT_HOST` empty to disable it. `TIME_MACHINE_PATH` should reference the server-side directory containing macOS backup bundles.
@@ -96,17 +101,21 @@ The Network screen runs a test only when requested and prevents concurrent tests
 bash scripts/install-speedtest.sh
 ```
 
-## Optional secondary Time Machine archive
+## Optional browsable Time Machine exports
 
-PiRouter can copy an idle Time Machine bundle into encrypted, deduplicated Restic snapshots on an SMB target. The source is read-only. A copy waits until Samba has no open backup files and the source has been quiet for 20 minutes. If Time Machine resumes, PiRouter stops the low-priority job, discards the incomplete snapshot, and retries later.
+Network Time Machine destinations are sparsebundle disk images. That format is required by macOS, but Linux storage servers cannot safely present the APFS snapshots inside it as ordinary files. PiRouter therefore coordinates with a helper on the Mac that owns the backup. macOS mounts the latest completed snapshot read-only, then `rsync` writes a normal timestamped directory to a secondary server over SSH.
 
-Run the interactive installer:
+Each export is directly browsable. Unchanged files are hard-linked to the previous exported directory when the destination filesystem supports hard links, preserving history without recopying every unchanged file. Interrupted `.partial` directories resume on the next request. The original Time Machine sparsebundle is never modified or copied to the secondary server.
+
+First install PiRouter on the Pi so `.env` contains a generated `PORTABLE_EXPORT_TOKEN`. On the Mac being backed up, run:
 
 ```bash
-bash scripts/install-archive-backup.sh
+npm run install:mac-export
 ```
 
-The installer prompts for the SMB share and account. Credentials, the archive environment, and the Restic recovery password are stored under `/etc/pirouter` with root-only permissions. Save the Restic password in a separate password manager or recovery vault.
+The macOS installer prompts for the Pi URL, pairing token, Unraid SSH target, destination under `/mnt/user`, and SSH key. It uses Homebrew rsync 3 to preserve metadata across macOS and Linux, then creates a background-only app and LaunchAgent that checks every five minutes. Automatic exports are limited to once per 24 hours by default; the Services screen can request one immediately. Grant the installed **PiRouter Exporter** app Full Disk Access so `tmutil` can mount completed snapshots.
+
+Portable exports are intended for convenient file recovery. Keep the original Time Machine destination for full Migration Assistant or macOS Recovery restores.
 
 ## Local history
 
@@ -119,7 +128,7 @@ The status endpoint stores at most one sample per minute in `data/pirouter.db`. 
 - `lib/status/` — cached network, service, system, and summary probes
 - `lib/types.ts` — shared domain data structures
 - `prisma/` — SQLite schema and migrations
-- `scripts/` — Pi installation, kiosk, display, speed-test, and archive tooling
-- `systemd/` — archive timers and Samba reliability configuration
+- `scripts/` — Pi installation, kiosk, display, speed-test, and macOS export tooling
+- `systemd/` — Samba reliability configuration
 
-Core status refreshes every ten seconds and pauses while the page is hidden. Expensive probes have independent caches, concurrent requests share one collection pass, and speed tests and archive copies run only on demand or their configured schedules.
+Core status refreshes every ten seconds and pauses while the page is hidden. Expensive probes have independent caches, concurrent requests share one collection pass, and speed tests and portable exports run only on demand or their configured schedules.

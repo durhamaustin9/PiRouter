@@ -25,7 +25,7 @@ import {
   formatDateTime,
   formatRate,
   formatUptime,
-  archiveLevel,
+  portableExportLevel,
   systemLevel,
   timeMachineDisplay,
 } from "@/components/dashboard/formatters";
@@ -39,7 +39,7 @@ export type ComponentDetailId =
   | "pi-system"
   | "link-health"
   | "internet-quality"
-  | "archive"
+  | "portable-export"
   | "attention"
   | "ssd-storage"
   | "health-history";
@@ -184,7 +184,7 @@ export function buildComponentDetail(
             hint: `${formatBytes(status.system.disk.totalBytes - status.system.disk.usedBytes)} remains free.`,
           },
         ],
-        note: "Archive replication waits while this share is active, protecting the live backup.",
+        note: "Portable exports use completed, immutable snapshots and never modify this live backup.",
         updatedAt,
       };
     case "endpoint-route":
@@ -378,37 +378,39 @@ export function buildComponentDetail(
         updatedAt,
       };
     }
-    case "archive":
+    case "portable-export":
       return {
-        title: "Secondary archive",
-        kicker: "Secondary snapshots",
+        title: "Browsable exports",
+        kicker: "Portable file recovery",
         description:
-          "Encrypted, deduplicated Restic snapshots copied from an idle Time Machine share.",
+          "Completed Time Machine snapshots exported by macOS as ordinary folders on a secondary server.",
         icon: faCloudArrowUp,
-        level: archiveLevel(status.archiveBackup),
+        level: portableExportLevel(status.portableExport),
         metrics: [
           {
             label: "Current state",
-            value: displayLevel(status.archiveBackup.state),
-            hint: status.archiveBackup.message,
+            value: displayLevel(status.portableExport.state),
+            hint: status.portableExport.message,
           },
           {
-            label: "Last attempt",
-            value: formatDateTime(status.archiveBackup.lastAttemptAt),
-            hint: "The most recent automatic or manual safety check.",
+            label: "Requested",
+            value: formatDateTime(status.portableExport.requestedAt),
+            hint: "The Mac claims manual requests from the dashboard.",
           },
           {
-            label: "Last snapshot",
-            value: formatDateTime(status.archiveBackup.lastSuccessAt),
-            hint: "The latest complete snapshot stored on the configured archive target.",
+            label: "Last export",
+            value: formatDateTime(status.portableExport.lastSuccessAt),
+            hint: status.portableExport.lastSnapshotName
+              ? `Snapshot ${status.portableExport.lastSnapshotName}.`
+              : "No completed portable export yet.",
           },
           {
             label: "Automation",
-            value: status.archiveBackup.automatic ? "Every 30 min" : "Disabled",
-            hint: "Copies start only after Time Machine has been quiet for 20 minutes.",
+            value: status.portableExport.automatic ? "Daily" : "Manual",
+            hint: "Daily exports use the newest completed Time Machine snapshot.",
           },
         ],
-        note: "A waiting state is intentional while Time Machine is actively writing.",
+        note: "Timestamped folders are directly browsable; unchanged files are hard-linked to save space.",
         updatedAt,
       };
     case "attention": {

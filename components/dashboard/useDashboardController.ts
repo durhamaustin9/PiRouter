@@ -52,8 +52,8 @@ export function useDashboardController() {
     INITIAL_SPEED_TEST_JOB,
   );
   const [speedModalOpen, setSpeedModalOpen] = useState(false);
-  const [archiveStarting, setArchiveStarting] = useState(false);
-  const [archiveError, setArchiveError] = useState<string | null>(null);
+  const [portableExportStarting, setPortableExportStarting] = useState(false);
+  const [portableExportError, setPortableExportError] = useState<string | null>(null);
   const mountedRef = useRef(true);
   const statusInFlightRef = useRef<Promise<void> | null>(null);
   const historyInFlightRef = useRef<Promise<void> | null>(null);
@@ -204,11 +204,11 @@ export function useDashboardController() {
     return request;
   }, [speedTestJob.state]);
 
-  const runArchiveBackup = useCallback(async () => {
-    setArchiveStarting(true);
-    setArchiveError(null);
+  const runPortableExport = useCallback(async () => {
+    setPortableExportStarting(true);
+    setPortableExportError(null);
     try {
-      await fetchJson<{ message: string }>("/api/archive-backup", {
+      await fetchJson<{ message: string }>("/api/portable-export", {
         method: "POST",
       });
       await loadStatus();
@@ -217,13 +217,13 @@ export function useDashboardController() {
       }, 1_000);
     } catch (requestError) {
       if (!mountedRef.current) return;
-      setArchiveError(
+      setPortableExportError(
         requestError instanceof Error
           ? requestError.message
-          : "Unable to start the archive backup",
+          : "Unable to request the portable export",
       );
     } finally {
-      if (mountedRef.current) setArchiveStarting(false);
+      if (mountedRef.current) setPortableExportStarting(false);
     }
   }, [loadStatus]);
 
@@ -238,8 +238,8 @@ export function useDashboardController() {
     speedModalOpen,
     setSpeedModalOpen,
     runSpeedTest,
-    archiveStarting,
-    archiveError,
-    runArchiveBackup,
+    portableExportStarting,
+    portableExportError,
+    runPortableExport,
   };
 }

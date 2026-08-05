@@ -66,23 +66,25 @@ export interface TimeMachineStatus {
   message: string;
 }
 
-export type ArchiveBackupState =
+export type PortableExportState =
   | "unconfigured"
   | "waiting"
+  | "requested"
   | "running"
-  | "maintenance"
   | "success"
   | "error";
 
-export interface ArchiveBackupStatus {
+export interface PortableExportStatus {
   configured: boolean;
   automatic: boolean;
-  state: ArchiveBackupState;
+  state: PortableExportState;
   message: string;
+  requestId: string | null;
+  requestedAt: string | null;
   lastAttemptAt: string | null;
   lastSuccessAt: string | null;
-  lastSnapshotId: string | null;
-  dataAddedBytes: number | null;
+  lastSnapshotName: string | null;
+  bytesCopied: number | null;
 }
 
 export interface DiskStatus {
@@ -116,7 +118,7 @@ export interface PiStatus {
   tailscale: TailscaleStatus;
   endpoint: EndpointStatus;
   timeMachine: TimeMachineStatus;
-  archiveBackup: ArchiveBackupStatus;
+  portableExport: PortableExportStatus;
   system: SystemStatus;
   issues: StatusIssue[];
 }

@@ -82,9 +82,9 @@ export function Dashboard() {
       <DashboardHeader
         status={status}
         refreshing={controller.refreshing}
-        archiveStarting={controller.archiveStarting}
+        portableExportStarting={controller.portableExportStarting}
         onRefresh={() => void controller.loadStatus(true)}
-        onArchiveBackup={() => void controller.runArchiveBackup()}
+        onPortableExport={() => void controller.runPortableExport()}
         onEnterFocusMode={() => setFocusMode(true)}
       />
 
@@ -111,9 +111,9 @@ export function Dashboard() {
         {view === "services" && (
           <ServicesView
             status={status}
-            onArchiveBackup={() => void controller.runArchiveBackup()}
-            archiveStarting={controller.archiveStarting}
-            archiveError={controller.archiveError}
+            onPortableExport={() => void controller.runPortableExport()}
+            portableExportStarting={controller.portableExportStarting}
+            portableExportError={controller.portableExportError}
             onShowDetails={setComponentDetailId}
           />
         )}

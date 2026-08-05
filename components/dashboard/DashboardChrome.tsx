@@ -72,16 +72,16 @@ function Clock() {
 export function DashboardHeader({
   status,
   refreshing,
-  archiveStarting,
+  portableExportStarting,
   onRefresh,
-  onArchiveBackup,
+  onPortableExport,
   onEnterFocusMode,
 }: {
   status: PiStatus;
   refreshing: boolean;
-  archiveStarting: boolean;
+  portableExportStarting: boolean;
   onRefresh: () => void;
-  onArchiveBackup: () => void;
+  onPortableExport: () => void;
   onEnterFocusMode: () => void;
 }) {
   return (
@@ -112,14 +112,14 @@ export function DashboardHeader({
             <FontAwesomeIcon icon={faArrowsRotate} fixedWidth />
           </ActionIcon>
         </Tooltip>
-        <Tooltip label="Run archive backup">
+        <Tooltip label="Export latest backup">
           <ActionIcon
             variant="subtle"
             size="xl"
-            aria-label="Run archive backup"
-            onClick={onArchiveBackup}
-            loading={archiveStarting}
-            disabled={!status.archiveBackup.configured}
+            aria-label="Export latest Time Machine snapshot"
+            onClick={onPortableExport}
+            loading={portableExportStarting}
+            disabled={!status.portableExport.configured}
           >
             <FontAwesomeIcon icon={faCloudArrowUp} fixedWidth />
           </ActionIcon>

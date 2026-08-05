@@ -14,7 +14,7 @@
 # /api/status          Read-only live status
 # /api/history         Read-only seven-day health history
 # /api/speedtest       Operator-triggered network test; never crawl
-# /api/archive-backup  Operator-triggered archive check; never crawl
+# /api/portable-export Operator/helper export coordination; never crawl
 #
 # Repository structure
 # app/                   Next.js routes, metadata, and layered styles
@@ -22,8 +22,8 @@
 # lib/status/            Cached network, service, system, and summary probes
 # lib/types.ts           Shared domain data structures
 # prisma/                SQLite history schema and migrations
-# scripts/               Installation, kiosk, speed-test, and archive tools
-# systemd/               Archive timers and Samba reliability configuration
+# scripts/               Installation, kiosk, speed-test, and export tools
+# systemd/               Samba reliability configuration
 #
 # Contributor guidelines
 # - Keep credentials, `.env`, runtime databases, and operator notes outside Git.

@@ -1,5 +1,5 @@
 import type {
-  ArchiveBackupStatus,
+  PortableExportStatus,
   StatusLevel,
   SystemStatus,
   TimeMachineStatus,
@@ -97,10 +97,10 @@ export function systemLevel(system: SystemStatus): StatusLevel {
   return "healthy";
 }
 
-export function archiveLevel(status: ArchiveBackupStatus): StatusLevel {
+export function portableExportLevel(status: PortableExportStatus): StatusLevel {
   if (!status.configured) return "unconfigured";
   if (status.state === "error") return "critical";
-  if (status.state === "running" || status.state === "maintenance") {
+  if (status.state === "requested" || status.state === "running") {
     return "warning";
   }
   return "healthy";

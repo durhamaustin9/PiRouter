@@ -17,22 +17,22 @@ import type { PiStatus } from "@/lib/types";
 import type { ComponentDetailId } from "@/components/dashboard/componentDetails";
 import {
   formatDateTime,
-  archiveLevel,
+  portableExportLevel,
   timeMachineDisplay,
 } from "@/components/dashboard/formatters";
 import { Panel, PanelHeading } from "@/components/dashboard/primitives";
 
 export function ServicesView({
   status,
-  onArchiveBackup,
-  archiveStarting,
-  archiveError,
+  onPortableExport,
+  portableExportStarting,
+  portableExportError,
   onShowDetails,
 }: {
   status: PiStatus;
-  onArchiveBackup: () => void;
-  archiveStarting: boolean;
-  archiveError: string | null;
+  onPortableExport: () => void;
+  portableExportStarting: boolean;
+  portableExportError: string | null;
   onShowDetails: (id: ComponentDetailId) => void;
 }) {
   const timeMachine = timeMachineDisplay(status.timeMachine);
@@ -97,35 +97,35 @@ export function ServicesView({
         </div>
       </Panel>
 
-      <Panel className="archivePanel">
+      <Panel className="portableExportPanel">
         <PanelHeading
           icon={faCloudArrowUp}
-          label="Secondary archive"
-          level={archiveLevel(status.archiveBackup)}
-          meta={status.archiveBackup.automatic ? "Automatic" : "Setup"}
-          onSelect={() => onShowDetails("archive")}
+          label="Browsable exports"
+          level={portableExportLevel(status.portableExport)}
+          meta={status.portableExport.automatic ? "Daily" : "Setup"}
+          onSelect={() => onShowDetails("portable-export")}
         />
         <div className="serviceHero compact">
           <FontAwesomeIcon icon={faDatabase} fixedWidth />
           <div>
-            <strong>{formatDateTime(status.archiveBackup.lastSuccessAt)}</strong>
-            <span>{archiveError ?? status.archiveBackup.message}</span>
+            <strong>{formatDateTime(status.portableExport.lastSuccessAt)}</strong>
+            <span>{portableExportError ?? status.portableExport.message}</span>
           </div>
         </div>
         <Button
           className="backupButton"
           leftSection={<FontAwesomeIcon icon={faCloudArrowUp} fixedWidth />}
-          onClick={onArchiveBackup}
+          onClick={onPortableExport}
           loading={
-            archiveStarting ||
-            status.archiveBackup.state === "running" ||
-            status.archiveBackup.state === "maintenance"
+            portableExportStarting ||
+            status.portableExport.state === "requested" ||
+            status.portableExport.state === "running"
           }
-          disabled={!status.archiveBackup.configured}
+          disabled={!status.portableExport.configured}
           color="teal"
           fullWidth
         >
-          Archive now
+          Export latest
         </Button>
       </Panel>
 

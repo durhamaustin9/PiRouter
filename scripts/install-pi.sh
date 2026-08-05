@@ -48,6 +48,27 @@ if [[ ! -f .env ]]; then
   echo "Created .env from the included example. Configure ENDPOINT_HOST and TIME_MACHINE_PATH after setup."
 fi
 
+if ! grep -Eq '^PORTABLE_EXPORT_TOKEN="?[[:xdigit:]]{64}"?$' .env; then
+  portable_export_token="$(openssl rand -hex 32)"
+  env_temp="$(mktemp)"
+  awk -v token="$portable_export_token" '
+    BEGIN { replaced = 0 }
+    /^PORTABLE_EXPORT_TOKEN=/ {
+      print "PORTABLE_EXPORT_TOKEN=\"" token "\""
+      replaced = 1
+      next
+    }
+    { print }
+    END {
+      if (!replaced) print "PORTABLE_EXPORT_TOKEN=\"" token "\""
+    }
+  ' .env > "$env_temp"
+  install -m 0600 "$env_temp" .env
+  rm -f -- "$env_temp"
+  unset portable_export_token
+  echo "Generated a private macOS portable-export pairing token in .env."
+fi
+
 mkdir -p data "$systemd_user_dir" "$labwc_dir"
 npm ci --no-audit --no-fund
 npm run build
@@ -111,3 +132,5 @@ echo "PiRouter is installed and running at http://127.0.0.1:3000"
 echo "Edit $project_dir/.env to add an optional service endpoint and Time Machine share, then run:"
 echo "  systemctl --user restart pirouter-dashboard"
 echo "The touchscreen kiosk will open automatically through labwc at your next desktop login."
+echo "To create browsable Time Machine copies on another server, pair the Mac with:"
+echo "  npm run install:mac-export"

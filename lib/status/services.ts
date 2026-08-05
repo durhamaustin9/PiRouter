@@ -2,12 +2,11 @@ import { promises as fs } from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import type {
-  ArchiveBackupState,
-  ArchiveBackupStatus,
   EndpointStatus,
   TailscaleStatus,
   TimeMachineStatus,
 } from "@/lib/types";
+import { readPortableExportStatus } from "@/lib/portableExport";
 import { createCachedProbe } from "@/lib/status/cache";
 import { round, runCommand } from "@/lib/status/shared";
 
@@ -224,12 +223,25 @@ export async function collectTimeMachineStatus(): Promise<TimeMachineStatus> {
       exists = false;
     }
 
-    const [latest, backupInProgress] = exists
+    const [latest, shareHasOpenFiles] = exists
       ? await Promise.all([
           latestModified(target),
           timeMachineBackupInProgress(target),
         ])
       : [null, null];
+    const configuredActiveWindow = Number.parseFloat(
+      process.env.TIME_MACHINE_ACTIVE_WINDOW_MINUTES || "3",
+    );
+    const activeWindowMinutes =
+      Number.isFinite(configuredActiveWindow) && configuredActiveWindow > 0
+        ? configuredActiveWindow
+        : 3;
+    const backupInProgress =
+      shareHasOpenFiles === null
+        ? null
+        : shareHasOpenFiles &&
+          latest !== null &&
+          Date.now() - latest <= activeWindowMinutes * 60_000;
     const ageHours = latest ? (Date.now() - latest) / 3_600_000 : null;
     const healthy =
       exists &&
@@ -269,50 +281,4 @@ export async function collectTimeMachineStatus(): Promise<TimeMachineStatus> {
   });
 }
 
-const ARCHIVE_STATES = new Set<ArchiveBackupState>([
-  "unconfigured",
-  "waiting",
-  "running",
-  "maintenance",
-  "success",
-  "error",
-]);
-
-function parseArchiveState(value: unknown): ArchiveBackupState {
-  return typeof value === "string" &&
-    ARCHIVE_STATES.has(value as ArchiveBackupState)
-    ? (value as ArchiveBackupState)
-    : "waiting";
-}
-
-export async function collectArchiveBackupStatus(): Promise<ArchiveBackupStatus> {
-  const statusPath =
-    process.env.ARCHIVE_STATUS_PATH?.trim() ||
-    "/var/lib/pirouter/archive-status.json";
-  try {
-    const parsed = JSON.parse(
-      await fs.readFile(/* turbopackIgnore: true */ statusPath, "utf8"),
-    ) as Partial<ArchiveBackupStatus>;
-    return {
-      configured: parsed.configured === true,
-      automatic: parsed.automatic === true,
-      state: parseArchiveState(parsed.state),
-      message: parsed.message ?? "Waiting for the first archive copy",
-      lastAttemptAt: parsed.lastAttemptAt ?? null,
-      lastSuccessAt: parsed.lastSuccessAt ?? null,
-      lastSnapshotId: parsed.lastSnapshotId ?? null,
-      dataAddedBytes: parsed.dataAddedBytes ?? null,
-    };
-  } catch {
-    return {
-      configured: false,
-      automatic: false,
-      state: "unconfigured",
-      message: "Secondary archive is not configured",
-      lastAttemptAt: null,
-      lastSuccessAt: null,
-      lastSnapshotId: null,
-      dataAddedBytes: null,
-    };
-  }
-}
+export const collectPortableExportStatus = readPortableExportStatus;
