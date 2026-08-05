@@ -1,0 +1,402 @@
+.overviewGrid,
+.detailGrid {
+  max-width: 1400px;
+  min-height: 100%;
+  margin: 0 auto;
+  display: grid;
+  gap: 10px;
+}
+
+.overviewGrid {
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+}
+
+.panel {
+  min-width: 0;
+  min-height: 0;
+  padding: 12px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.025), transparent 45%),
+    var(--panel);
+}
+
+.overviewGrid .panel {
+  grid-column: span 4;
+}
+
+.panelHeading {
+  min-width: 0;
+  min-height: 18px;
+  margin-bottom: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.panelHeadingPrimary,
+.metric,
+.serviceHero,
+.routeDiagram span {
+  display: flex;
+  align-items: center;
+}
+
+.panelHeadingPrimary {
+  min-width: 0;
+  gap: 7px;
+  color: #c8dbd4;
+}
+
+.panelHeadingPrimary.selectable {
+  min-height: 30px;
+  margin: -6px 0 -6px -6px;
+  padding: 6px;
+  border-radius: 9px;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.panelHeadingPrimary.selectable:active {
+  background: var(--good-soft);
+  color: var(--text);
+}
+
+.panelHeadingPrimary.selectable:focus-visible,
+.healthDetailTrigger:focus-visible {
+  outline: 2px solid var(--good);
+  outline-offset: 2px;
+}
+
+.panelHeadingPrimary > svg:not(.panelInfoIcon) {
+  width: 14px;
+  color: var(--good);
+}
+
+.panelHeadingPrimary > span {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.panelHeadingPrimary .panelInfoIcon {
+  width: 10px;
+  flex: 0 0 auto;
+  color: #6f9488;
+  opacity: 0.9;
+}
+
+.panelMeta {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  color: var(--muted);
+  font: 600 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.05em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.healthPanel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background:
+    radial-gradient(circle at 20% 50%, rgba(85, 229, 176, 0.1), transparent 50%),
+    var(--panel);
+}
+
+.healthRing {
+  width: 100px;
+  height: 100px;
+  flex: 0 0 100px;
+  display: grid;
+  place-items: center;
+}
+
+.healthRing .mantine-RingProgress-label {
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+
+.healthScore {
+  width: 100%;
+  display: block;
+  transform: translateY(-1px);
+  color: var(--text);
+  font: 750 24px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-align: center;
+}
+
+.healthCopy {
+  min-width: 0;
+}
+
+.healthDetailTrigger {
+  padding: 5px 6px;
+  margin: -5px -6px;
+  border-radius: 10px;
+  color: inherit;
+  text-align: left;
+  transition: background 140ms ease;
+}
+
+.healthDetailTrigger:active {
+  background: rgba(85, 229, 176, 0.08);
+}
+
+.healthDetailTrigger .eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.healthDetailTrigger .eyebrow svg {
+  width: 10px;
+  color: #6f9488;
+}
+
+.eyebrow {
+  color: var(--good);
+  font: 700 9px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.healthCopy h2,
+.serviceStatusLine h2 {
+  margin: 5px 0 4px;
+  font-size: clamp(15px, 2vw, 20px);
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+}
+
+.healthCopy p,
+.serviceStatusLine p,
+.panelFoot {
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.trafficPair {
+  margin: 6px 0 11px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.trafficPair > div {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 0 6px;
+}
+
+.trafficPair svg {
+  grid-row: span 2;
+  color: var(--good);
+  font-size: 13px;
+}
+
+.trafficPair > div:nth-child(2) svg { color: var(--cyan); }
+
+.trafficPair span {
+  overflow: hidden;
+  font: 750 clamp(13px, 1.8vw, 19px)/1.15 ui-monospace, SFMono-Regular,
+    Menlo, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trafficPair small,
+.serviceHero span,
+.progressLabel,
+.systemMetrics small,
+.largeTraffic small,
+.qualityReadout span,
+.systemHeroStats span,
+.diskNumber span {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.inlineFacts {
+  display: flex;
+  gap: 7px;
+  overflow: hidden;
+}
+
+.inlineFacts span,
+.addressTag {
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #abc4bb;
+  font: 600 8px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: nowrap;
+}
+
+.serviceHero {
+  min-height: 43px;
+  margin-bottom: 8px;
+  gap: 10px;
+}
+
+.serviceHero > svg {
+  width: 25px;
+  height: 25px;
+  padding: 9px;
+  border-radius: 12px;
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+.serviceHero > div {
+  min-width: 0;
+  display: grid;
+}
+
+.serviceHero strong,
+.serviceHero span,
+.panelFoot {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.serviceHero strong { font-size: 14px; }
+.serviceHero.compact { margin: 2px 0 6px; }
+.serviceHero.compact > svg { width: 20px; height: 20px; padding: 8px; }
+
+.progressLabel {
+  margin-top: 4px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.systemMetrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 6px;
+}
+
+.metric {
+  min-width: 0;
+  gap: 7px;
+}
+
+.metricIcon {
+  width: 29px;
+  height: 29px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #9bb0a9;
+  font-size: 11px;
+}
+
+.metricIcon.good { color: var(--good); background: var(--good-soft); }
+.metricIcon.warn { color: var(--warn); background: rgba(255, 189, 90, 0.1); }
+.metricIcon.danger { color: var(--danger); background: rgba(255, 107, 107, 0.1); }
+
+.metric > span:last-child {
+  min-width: 0;
+  display: grid;
+}
+
+.metric strong {
+  font: 700 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.historyBars {
+  height: 66px;
+  padding-top: 8px;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  border-bottom: 1px solid var(--line-strong);
+  background: repeating-linear-gradient(
+    to top,
+    transparent 0,
+    transparent 20px,
+    rgba(255, 255, 255, 0.025) 21px
+  );
+}
+
+.historyBar {
+  min-width: 2px;
+  max-width: 14px;
+  flex: 1;
+  border-radius: 3px 3px 0 0;
+  background: linear-gradient(to top, rgba(85, 229, 176, 0.24), var(--good));
+}
+
+.emptyChart {
+  width: 100%;
+  align-self: center;
+  color: var(--muted);
+  font-size: 10px;
+  text-align: center;
+}
+
+.factList {
+  display: grid;
+  gap: 1px;
+}
+
+.factList > div {
+  min-height: 31px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+}
+
+.compactFacts > div { min-height: 27px; }
+.factList span { color: var(--muted); font-size: 10px; }
+.factList strong {
+  overflow-wrap: anywhere;
+  font: 650 10px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-align: right;
+}
+
+.qualityReadout {
+  margin: 9px 0;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.qualityReadout.three {
+  grid-template-columns: repeat(3, 1fr);
+  margin: 10px 0 7px;
+}
+
+.qualityReadout > div {
+  padding: 8px;
+  display: grid;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.025);
+  text-align: center;
+}
+
+.qualityReadout strong {
+  font: 750 22px/1.1 ui-monospace, SFMono-Regular, Menlo, monospace;
+}

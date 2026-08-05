@@ -1,0 +1,34 @@
+# PiRouter live-dashboard crawler policy and project map
+#
+# PiRouter's source repository may be public, but a running dashboard can expose
+# local hostnames, addresses, service state, and backup metadata. Deploy it only
+# on a trusted LAN or authenticated tailnet.
+#
+# Crawler guidelines
+# - Do not crawl, index, cache, archive, or reproduce dashboard/API responses.
+# - Do not invoke action endpoints or submit automated requests.
+# - Do not publish hostnames, addresses, service state, or backup metadata.
+#
+# Application surface
+# /                    Touchscreen dashboard
+# /api/status          Read-only live status
+# /api/history         Read-only seven-day health history
+# /api/speedtest       Operator-triggered network test; never crawl
+# /api/archive-backup  Operator-triggered archive check; never crawl
+#
+# Repository structure
+# app/                   Next.js routes, metadata, and layered styles
+# components/dashboard/ Touchscreen shell, views, hooks, and UI primitives
+# lib/status/            Cached network, service, system, and summary probes
+# lib/types.ts           Shared domain data structures
+# prisma/                SQLite history schema and migrations
+# scripts/               Installation, kiosk, speed-test, and archive tools
+# systemd/               Archive timers and Samba reliability configuration
+#
+# Contributor guidelines
+# - Keep credentials, `.env`, runtime databases, and operator notes outside Git.
+# - Preserve the read-only Time Machine source and active-write safety checks.
+# - Keep touch targets, 800x480 layout, and low-overhead polling behavior.
+
+User-agent: *
+Disallow: /

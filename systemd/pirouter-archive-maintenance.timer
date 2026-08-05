@@ -1,0 +1,10 @@
+[Unit]
+Description=Weekly secondary Time Machine history maintenance
+
+[Timer]
+OnCalendar=Sun *-*-* 03:30:00
+Persistent=true
+RandomizedDelaySec=30min
+
+[Install]
+WantedBy=timers.target

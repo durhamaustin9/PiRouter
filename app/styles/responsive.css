@@ -1,0 +1,75 @@
+@media (max-width: 760px) {
+  :root { --header-height: 58px; }
+
+  .topBar {
+    grid-template-columns: 1fr auto;
+    padding: 6px 10px;
+  }
+
+  .globalState { display: none; }
+  .brandBlock strong { font-size: 15px; }
+  .brandMark { width: 35px; height: 35px; }
+  .clockBlock strong { font-size: 15px; }
+  .dashboardMain { padding: 8px; }
+
+  .overviewGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: none;
+    grid-auto-rows: minmax(145px, auto);
+    gap: 8px;
+  }
+
+  .overviewGrid .panel { grid-column: auto; }
+  .panel { padding: 10px; border-radius: 14px; }
+
+  .networkDetailGrid,
+  .systemDetailGrid,
+  .servicesGrid {
+    height: auto;
+    grid-template-columns: 1fr;
+    grid-template-rows: none;
+    grid-auto-rows: auto;
+    gap: 8px;
+  }
+
+  .networkTrafficPanel,
+  .systemHealthPanel,
+  .linkHealthPanel,
+  .storagePanel,
+  .qualityPanel,
+  .historyPanel,
+  .timeMachineDetail,
+  .archivePanel,
+  .endpointPanel,
+  .tailscalePanel,
+  .issuePanel {
+    grid-column: 1;
+    grid-row: auto;
+    min-height: 170px;
+  }
+
+  .healthRing {
+    width: 88px;
+    height: 88px;
+    flex-basis: 88px;
+    transform: scale(0.88);
+    margin: -6px;
+  }
+}
+
+@media (max-width: 540px) {
+  .clockBlock { display: none; }
+  .topActions { gap: 0; }
+  .overviewGrid { grid-template-columns: 1fr; }
+  .overviewGrid .panel { min-height: 145px; }
+  .horizontalFacts,
+  .issueList { grid-template-columns: 1fr; }
+  .bottomNav button span { font-size: 8px; }
+  .componentMetricGrid { grid-template-columns: 1fr; }
+}
+
+@media (min-width: 1200px) and (min-height: 700px) {
+  .panel { padding: 16px; }
+  .panelHeading { margin-bottom: 12px; }
+  .servicesGrid { grid-template-rows: minmax(210px, 1fr) minmax(190px, auto); }
+}
