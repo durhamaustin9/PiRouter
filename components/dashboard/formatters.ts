@@ -1,4 +1,5 @@
 import type {
+  ArchiveBackupStatus,
   PortableExportStatus,
   StatusLevel,
   SystemStatus,
@@ -32,6 +33,26 @@ export function formatBytes(bytes: number) {
     unit += 1;
   }
   return `${value.toFixed(value >= 100 ? 0 : 1)} ${units[unit]}`;
+}
+
+export function formatPercent(value: number) {
+  if (!Number.isFinite(value)) return "—";
+  if (value < 1) return `${value.toFixed(2)}%`;
+  if (value < 10) return `${value.toFixed(1)}%`;
+  return `${value.toFixed(0)}%`;
+}
+
+export function formatDuration(seconds: number | null) {
+  if (seconds === null || !Number.isFinite(seconds) || seconds < 0) {
+    return "Calculating";
+  }
+  const wholeSeconds = Math.floor(seconds);
+  const days = Math.floor(wholeSeconds / 86_400);
+  const hours = Math.floor((wholeSeconds % 86_400) / 3_600);
+  const minutes = Math.floor((wholeSeconds % 3_600) / 60);
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
 }
 
 export function formatAge(date: string | null) {
@@ -101,6 +122,15 @@ export function portableExportLevel(status: PortableExportStatus): StatusLevel {
   if (!status.configured) return "unconfigured";
   if (status.state === "error") return "critical";
   if (status.state === "requested" || status.state === "running") {
+    return "warning";
+  }
+  return "healthy";
+}
+
+export function archiveBackupLevel(status: ArchiveBackupStatus): StatusLevel {
+  if (!status.configured) return "unconfigured";
+  if (status.state === "error") return "critical";
+  if (status.state === "running" || status.state === "maintenance") {
     return "warning";
   }
   return "healthy";

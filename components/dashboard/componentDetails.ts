@@ -20,9 +20,12 @@ import type {
   StatusLevel,
 } from "@/lib/types";
 import {
+  archiveBackupLevel,
   formatAge,
   formatBytes,
   formatDateTime,
+  formatDuration,
+  formatPercent,
   formatRate,
   formatUptime,
   portableExportLevel,
@@ -39,6 +42,7 @@ export type ComponentDetailId =
   | "pi-system"
   | "link-health"
   | "internet-quality"
+  | "archive-backup"
   | "portable-export"
   | "attention"
   | "ssd-storage"
@@ -51,6 +55,12 @@ export interface ComponentDetail {
   icon: IconDefinition;
   level: StatusLevel;
   metrics: Array<{ label: string; value: string; hint: string }>;
+  progress?: {
+    percent: number;
+    value: string;
+    label: string;
+    detail: string;
+  };
   note: string;
   updatedAt: string;
 }
@@ -375,6 +385,99 @@ export function buildComponentDetail(
           },
         ],
         note: "Health probes are lightweight; the bandwidth test runs only when requested.",
+        updatedAt,
+      };
+    }
+    case "archive-backup": {
+      const archive = status.archiveBackup;
+      const hasLiveProgress =
+        archive.state === "running" && archive.progressPercent !== null;
+      const processedDetail =
+        archive.bytesProcessed !== null && archive.totalBytes !== null
+          ? `${formatBytes(archive.bytesProcessed)} of ${formatBytes(archive.totalBytes)} source data processed`
+          : "Restic is scanning the Time Machine bundle";
+      const liveMetrics = hasLiveProgress
+        ? [
+            {
+              label: "Current state",
+              value: "Actively transferring",
+              hint: archive.message,
+            },
+            {
+              label: "Source processed",
+              value:
+                archive.bytesProcessed !== null && archive.totalBytes !== null
+                  ? `${formatBytes(archive.bytesProcessed)} / ${formatBytes(archive.totalBytes)}`
+                  : "Calculating",
+              hint: "Deduplication means actual network and repository bytes can be smaller.",
+            },
+            {
+              label: "Latest activity",
+              value: formatAge(archive.progressUpdatedAt),
+              hint: "A fresh timestamp confirms Restic is still reporting progress.",
+            },
+            {
+              label: "Current item",
+              value: archive.currentFile ?? "Scanning bundle",
+              hint: "The Time Machine sparsebundle item currently being processed.",
+            },
+            {
+              label: "Files processed",
+              value:
+                archive.filesProcessed !== null && archive.totalFiles !== null
+                  ? `${archive.filesProcessed.toLocaleString()} / ${archive.totalFiles.toLocaleString()}`
+                  : "Calculating",
+              hint: "Large sparsebundle bands make byte progress more useful than file count.",
+            },
+            {
+              label: "Elapsed",
+              value: formatDuration(archive.elapsedSeconds),
+              hint: "Time spent in the current Restic attempt.",
+            },
+          ]
+        : [
+            {
+              label: "Current state",
+              value: displayLevel(archive.state),
+              hint: archive.message,
+            },
+            {
+              label: "Last attempt",
+              value: formatDateTime(archive.lastAttemptAt),
+              hint: "The most recent automatic or manual archive check.",
+            },
+            {
+              label: "Last snapshot",
+              value: formatDateTime(archive.lastSuccessAt),
+              hint: archive.lastSnapshotId
+                ? `Restic snapshot ${archive.lastSnapshotId.slice(0, 8)}.`
+                : "No complete Unraid snapshot yet.",
+            },
+            {
+              label: "Automation",
+              value: archive.automatic ? "Every 30 min" : "Disabled",
+              hint: "A transfer begins only after Time Machine has been quiet for 20 minutes.",
+            },
+          ];
+      return {
+        title: "Unraid archive",
+        kicker: "Independent secondary backup",
+        description:
+          "Encrypted, deduplicated Restic snapshots copied directly from the Pi without relying on the Mac.",
+        icon: faCloudArrowUp,
+        level: archiveBackupLevel(archive),
+        metrics: liveMetrics,
+        progress: hasLiveProgress
+          ? {
+              percent: archive.progressPercent ?? 0,
+              value: formatPercent(archive.progressPercent ?? 0),
+              label: "Live Restic progress",
+              detail: `${processedDetail} · updated ${formatAge(archive.progressUpdatedAt)}`,
+            }
+          : undefined,
+        note: hasLiveProgress
+          ? "Processed bytes prove the job is advancing. Restic deduplicates before upload, so they are not the exact number of network bytes sent."
+          : "Interrupted uploads retry from deduplicated chunks. Restoring this archive requires Restic.",
         updatedAt,
       };
     }

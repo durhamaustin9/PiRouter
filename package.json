@@ -9,12 +9,13 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
-    "start": "next start --hostname 127.0.0.1",
+    "start": "next start --hostname 0.0.0.0",
     "lint": "eslint . --ignore-pattern .next --ignore-pattern prisma/generated",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "install:pi": "bash scripts/install-pi.sh",
+    "install:archive": "bash scripts/install-archive-backup.sh",
     "install:mac-export": "bash scripts/install-portable-export-macos.sh",
     "postinstall": "prisma generate"
   },

@@ -73,16 +73,16 @@ function Clock() {
 export function DashboardHeader({
   status,
   refreshing,
-  portableExportStarting,
+  archiveBackupStarting,
   onRefresh,
-  onPortableExport,
+  onArchiveBackup,
   onEnterFocusMode,
 }: {
   status: PiStatus;
   refreshing: boolean;
-  portableExportStarting: boolean;
+  archiveBackupStarting: boolean;
   onRefresh: () => void;
-  onPortableExport: () => void;
+  onArchiveBackup: () => void;
   onEnterFocusMode: () => void;
 }) {
   return (
@@ -113,14 +113,14 @@ export function DashboardHeader({
             <FontAwesomeIcon icon={faArrowsRotate} fixedWidth />
           </ActionIcon>
         </Tooltip>
-        <Tooltip label="Export latest backup">
+        <Tooltip label="Back up to Unraid">
           <ActionIcon
             variant="subtle"
             size="xl"
-            aria-label="Export latest Time Machine snapshot"
-            onClick={onPortableExport}
-            loading={portableExportStarting}
-            disabled={!status.portableExport.configured}
+            aria-label="Back up Time Machine to Unraid"
+            onClick={onArchiveBackup}
+            loading={archiveBackupStarting}
+            disabled={!status.archiveBackup.configured}
           >
             <FontAwesomeIcon icon={faCloudArrowUp} fixedWidth />
           </ActionIcon>

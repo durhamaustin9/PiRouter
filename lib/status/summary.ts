@@ -1,7 +1,7 @@
 import type {
+  ArchiveBackupStatus,
   EndpointStatus,
   NetworkStatus,
-  PortableExportStatus,
   StatusIssue,
   StatusSummary,
   SystemStatus,
@@ -14,7 +14,7 @@ type SummaryInput = {
   tailscale: TailscaleStatus;
   endpoint: EndpointStatus;
   timeMachine: TimeMachineStatus;
-  portableExport: PortableExportStatus;
+  archiveBackup: ArchiveBackupStatus;
   system: SystemStatus;
 };
 
@@ -23,7 +23,7 @@ export function summarizeStatus({
   tailscale,
   endpoint,
   timeMachine,
-  portableExport,
+  archiveBackup,
   system,
 }: SummaryInput): { issues: StatusIssue[]; summary: StatusSummary } {
   const issues: StatusIssue[] = [];
@@ -94,12 +94,12 @@ export function summarizeStatus({
     });
   }
 
-  if (portableExport.configured && portableExport.state === "error") {
+  if (archiveBackup.configured && archiveBackup.state === "error") {
     score -= 8;
     issues.push({
-      id: "portable-export",
+      id: "archive-backup",
       level: "warning",
-      message: portableExport.message,
+      message: archiveBackup.message,
     });
   }
 

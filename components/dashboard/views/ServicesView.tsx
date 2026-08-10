@@ -16,26 +16,32 @@ import {
 import type { PiStatus } from "@/lib/types";
 import type { ComponentDetailId } from "@/components/dashboard/componentDetails";
 import {
+  archiveBackupLevel,
+  formatAge,
+  formatBytes,
   formatDateTime,
-  portableExportLevel,
+  formatPercent,
   timeMachineDisplay,
 } from "@/components/dashboard/formatters";
 import { Panel, PanelHeading } from "@/components/dashboard/primitives";
 
 export function ServicesView({
   status,
-  onPortableExport,
-  portableExportStarting,
-  portableExportError,
+  onArchiveBackup,
+  archiveBackupStarting,
+  archiveBackupError,
   onShowDetails,
 }: {
   status: PiStatus;
-  onPortableExport: () => void;
-  portableExportStarting: boolean;
-  portableExportError: string | null;
+  onArchiveBackup: () => void;
+  archiveBackupStarting: boolean;
+  archiveBackupError: string | null;
   onShowDetails: (id: ComponentDetailId) => void;
 }) {
   const timeMachine = timeMachineDisplay(status.timeMachine);
+  const archiveProgress = status.archiveBackup.progressPercent;
+  const archiveRunning =
+    status.archiveBackup.state === "running" && archiveProgress !== null;
 
   return (
     <section className="detailGrid servicesGrid" aria-label="Service details">
@@ -97,35 +103,55 @@ export function ServicesView({
         </div>
       </Panel>
 
-      <Panel className="portableExportPanel">
+      <Panel className="archiveBackupPanel">
         <PanelHeading
           icon={faCloudArrowUp}
-          label="Browsable exports"
-          level={portableExportLevel(status.portableExport)}
-          meta={status.portableExport.automatic ? "Daily" : "Setup"}
-          onSelect={() => onShowDetails("portable-export")}
+          label="Unraid archive"
+          level={archiveBackupLevel(status.archiveBackup)}
+          meta={status.archiveBackup.automatic ? "Automatic" : "Setup"}
+          onSelect={() => onShowDetails("archive-backup")}
         />
         <div className="serviceHero compact">
           <FontAwesomeIcon icon={faDatabase} fixedWidth />
           <div>
-            <strong>{formatDateTime(status.portableExport.lastSuccessAt)}</strong>
-            <span>{portableExportError ?? status.portableExport.message}</span>
+            <strong>
+              {archiveRunning
+                ? `${formatPercent(archiveProgress)} processed`
+                : formatDateTime(status.archiveBackup.lastSuccessAt)}
+            </strong>
+            <span>
+              {archiveBackupError ??
+                (archiveRunning &&
+                status.archiveBackup.bytesProcessed !== null &&
+                status.archiveBackup.totalBytes !== null
+                  ? `${formatBytes(status.archiveBackup.bytesProcessed)} of ${formatBytes(status.archiveBackup.totalBytes)} · updated ${formatAge(status.archiveBackup.progressUpdatedAt)}`
+                  : status.archiveBackup.message)}
+            </span>
           </div>
         </div>
+        {archiveRunning && (
+          <div className="archiveInlineProgress" aria-hidden="true">
+            <i
+              style={{
+                width: `${Math.max(0.35, Math.min(100, archiveProgress))}%`,
+              }}
+            />
+          </div>
+        )}
         <Button
           className="backupButton"
           leftSection={<FontAwesomeIcon icon={faCloudArrowUp} fixedWidth />}
-          onClick={onPortableExport}
+          onClick={onArchiveBackup}
           loading={
-            portableExportStarting ||
-            status.portableExport.state === "requested" ||
-            status.portableExport.state === "running"
+            archiveBackupStarting ||
+            status.archiveBackup.state === "running" ||
+            status.archiveBackup.state === "maintenance"
           }
-          disabled={!status.portableExport.configured}
+          disabled={!status.archiveBackup.configured}
           color="teal"
           fullWidth
         >
-          Export latest
+          Back up to Unraid
         </Button>
       </Panel>
 

@@ -1,6 +1,7 @@
 import type { PiStatus } from "@/lib/types";
 import { collectNetworkStatus } from "@/lib/status/network";
 import {
+  collectArchiveBackupStatus,
   collectEndpointStatus,
   collectPortableExportStatus,
   collectTailscaleStatus,
@@ -19,12 +20,21 @@ let collectionInFlight: Promise<PiStatus> | null = null;
 async function collect(): Promise<PiStatus> {
   const healthTarget = process.env.HEALTH_TARGET?.trim() || "1.1.1.1";
   const diskPath = process.env.TIME_MACHINE_PATH?.trim() || "/";
-  const [network, tailscale, endpoint, timeMachine, portableExport, system] =
+  const [
+    network,
+    tailscale,
+    endpoint,
+    timeMachine,
+    archiveBackup,
+    portableExport,
+    system,
+  ] =
     await Promise.all([
       collectNetworkStatus(healthTarget),
       collectTailscaleStatus(),
       collectEndpointStatus(),
       collectTimeMachineStatus(),
+      collectArchiveBackupStatus(),
       collectPortableExportStatus(),
       collectSystemStatus(diskPath),
     ]);
@@ -33,7 +43,7 @@ async function collect(): Promise<PiStatus> {
     tailscale,
     endpoint,
     timeMachine,
-    portableExport,
+    archiveBackup,
     system,
   });
 
@@ -48,6 +58,7 @@ async function collect(): Promise<PiStatus> {
     tailscale,
     endpoint,
     timeMachine,
+    archiveBackup,
     portableExport,
     system,
     issues,

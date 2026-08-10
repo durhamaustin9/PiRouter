@@ -87,6 +87,34 @@ export interface PortableExportStatus {
   bytesCopied: number | null;
 }
 
+export type ArchiveBackupState =
+  | "unconfigured"
+  | "waiting"
+  | "running"
+  | "maintenance"
+  | "success"
+  | "error";
+
+export interface ArchiveBackupStatus {
+  configured: boolean;
+  automatic: boolean;
+  state: ArchiveBackupState;
+  message: string;
+  lastAttemptAt: string | null;
+  lastSuccessAt: string | null;
+  lastSnapshotId: string | null;
+  dataAddedBytes: number | null;
+  progressPercent: number | null;
+  bytesProcessed: number | null;
+  totalBytes: number | null;
+  filesProcessed: number | null;
+  totalFiles: number | null;
+  currentFile: string | null;
+  elapsedSeconds: number | null;
+  estimatedSecondsRemaining: number | null;
+  progressUpdatedAt: string | null;
+}
+
 export interface DiskStatus {
   path: string;
   filesystem: string;
@@ -118,6 +146,7 @@ export interface PiStatus {
   tailscale: TailscaleStatus;
   endpoint: EndpointStatus;
   timeMachine: TimeMachineStatus;
+  archiveBackup: ArchiveBackupStatus;
   portableExport: PortableExportStatus;
   system: SystemStatus;
   issues: StatusIssue[];

@@ -1,0 +1,14 @@
+[Unit]
+Description=Archive an idle Time Machine bundle directly to Unraid
+After=network-online.target tailscaled.service smbd.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/pirouter-archive-backup
+Nice=15
+IOSchedulingClass=idle
+Restart=on-failure
+RestartSec=5min
+TimeoutStartSec=infinity

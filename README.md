@@ -9,7 +9,8 @@ At a glance, the dashboard shows:
 - an optional, configurable TCP service-endpoint check;
 - Tailscale state and peer counts;
 - CPU load, temperature, memory, storage, and uptime;
-- browsable, timestamped exports of completed Time Machine snapshots;
+- independent encrypted Time Machine archives uploaded by the Pi;
+- optional browsable, timestamped exports of completed snapshots;
 - an operator-triggered Ookla speed test with progress reporting.
 
 Card titles open touch-friendly explanations of each reading. The header and bottom navigation stay fixed over scrolling content, and Focus mode hides both bars while leaving a one-tap restore control visible.
@@ -35,6 +36,7 @@ Keep `.env`, SQLite data, SSH keys, pairing tokens, and operator notes outside G
 - Tailscale CLI integration
 - Raspberry Pi OS and Linux telemetry
 - Samba-aware Time Machine activity detection
+- Pi-to-Unraid Restic replication with automatic retry
 - macOS-assisted portable Time Machine exports
 
 ## Develop locally
@@ -70,6 +72,7 @@ TIME_MACHINE_STALE_HOURS="36"
 PORTABLE_EXPORT_TOKEN="replace-with-a-random-64-character-hex-token"
 PORTABLE_EXPORT_AUTOMATIC="true"
 PORTABLE_EXPORT_STATUS_PATH="./data/portable-export.json"
+ARCHIVE_STATUS_PATH="/var/lib/pirouter/archive-status.json"
 ```
 
 The endpoint monitor performs only a TCP connection handshake. Leave `ENDPOINT_HOST` empty to disable it. `TIME_MACHINE_PATH` should reference the server-side directory containing macOS backup bundles.
@@ -94,7 +97,9 @@ systemctl --user restart pirouter-dashboard
 journalctl --user -u pirouter-dashboard -f
 ```
 
-To proxy the local dashboard through an authenticated tailnet:
+The dashboard listens on the Pi's LAN interfaces so companion devices on the
+trusted home network can connect directly. To also proxy it through an
+authenticated tailnet:
 
 ```bash
 tailscale serve --bg http://127.0.0.1:3000
@@ -108,11 +113,34 @@ The Network screen runs a test only when requested and prevents concurrent tests
 bash scripts/install-speedtest.sh
 ```
 
+## Independent Unraid archive
+
+The primary secondary-backup path runs entirely on the Pi. After the Time Machine
+bundle has been quiet for 20 minutes, the Pi stores an encrypted, deduplicated
+Restic snapshot on Unraid over SSH/SFTP. A Mac does not need to be awake or on the
+same network. If Tailscale or SMB disconnects, the service fails safely, retries
+after five minutes, and reuses chunks that already reached Unraid.
+
+The Pi monitors the source throughout each transfer. If Time Machine begins
+writing, the incomplete Restic snapshot is discarded and retried later. The
+original sparsebundle is only read. Install the archive on the Pi with:
+
+```bash
+npm run install:archive
+```
+
+The installer asks for the Unraid SSH target, initializes a
+Restic repository, and schedules checks every 30 minutes. Save a separate secure
+copy of `/etc/pirouter/restic-password`; both the repository and that password
+are required for recovery. Restic archives protect the full Time Machine bundle
+but are not directly browsable—restore the bundle with Restic before opening it
+with Time Machine or Migration Assistant.
+
 ## Optional browsable Time Machine exports
 
-Network Time Machine destinations are sparsebundle disk images. That format is required by macOS, but Linux storage servers cannot safely present the APFS snapshots inside it as ordinary files. PiRouter therefore coordinates with a helper on the Mac that owns the backup. macOS mounts the latest completed snapshot read-only, then `rsync` writes a normal timestamped directory to a secondary server over SSH.
+Network Time Machine destinations are sparsebundle disk images. That format is required by macOS, but Linux storage servers cannot safely present the APFS snapshots inside it as ordinary files. For optional ordinary folders in addition to the independent Restic archive, PiRouter can coordinate with a helper on the Mac that owns the backup. macOS mounts the latest completed snapshot read-only, then `rsync` writes a normal timestamped directory to a secondary server over SSH. This optional export requires the Mac to be awake and able to reach both servers.
 
-Each export is directly browsable. Unchanged files are hard-linked to the previous exported directory when the destination filesystem supports hard links, preserving history without recopying every unchanged file. Interrupted `.partial` directories resume on the next request. The original Time Machine sparsebundle is never modified or copied to the secondary server.
+Each export is directly browsable. Unchanged files are hard-linked to the previous exported directory when the destination filesystem supports hard links, preserving history without recopying every unchanged file. Interrupted `.partial` directories resume on the next request. Completed timestamped export folders are append-only: PiRouter never prunes, rotates, overwrites, or deletes them. Remove old exports manually when desired; deleting one hard-linked snapshot does not remove files that are still referenced by another snapshot. The original Time Machine sparsebundle is never modified or copied to the secondary server.
 
 First install PiRouter on the Pi so `.env` contains a generated `PORTABLE_EXPORT_TOKEN`. On the Mac being backed up, run:
 
@@ -120,7 +148,21 @@ First install PiRouter on the Pi so `.env` contains a generated `PORTABLE_EXPORT
 npm run install:mac-export
 ```
 
-The macOS installer prompts for the Pi URL, pairing token, Unraid SSH target, destination under `/mnt/user`, and SSH key. It uses Homebrew rsync 3 to preserve metadata across macOS and Linux, then creates a background-only app and LaunchAgent that checks every five minutes. Automatic exports are limited to once per 24 hours by default; the Services screen can request one immediately. Grant the installed **PiRouter Exporter** app Full Disk Access so `tmutil` can mount completed snapshots.
+The macOS installer preserves existing pairing details on upgrades and installs
+**PiRouter Exporter** in `/Applications`. Opening it shows the same live dashboard
+as the Pi touchscreen. It prefers a direct local-network connection and falls
+back automatically to the authenticated Tailscale URL away from home. A separate
+LaunchAgent checks for export work every five minutes even while the app is closed.
+The helper uses Homebrew rsync 3 to preserve file contents, directory structure,
+permissions, and timestamps across macOS and Linux. While a copy is running, the
+Services screen shows rsync's overall completion percentage. macOS ACLs and
+extended attributes are omitted because Linux storage cannot represent every APFS
+ACL value or macOS resource fork. Root-level Time Machine control files and
+protected macOS operating-system state that macOS denies direct access to are also
+omitted; they are not part of the browsable user data, and the original Time
+Machine backup is never modified. Automatic exports are limited to once per 24
+hours by default; the Services screen can request one immediately. Grant the
+installed app Full Disk Access so `tmutil` can mount completed snapshots.
 
 Portable exports are intended for convenient file recovery. Keep the original Time Machine destination for full Migration Assistant or macOS Recovery restores.
 

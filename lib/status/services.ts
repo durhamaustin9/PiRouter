@@ -7,6 +7,7 @@ import type {
   TimeMachineStatus,
 } from "@/lib/types";
 import { readPortableExportStatus } from "@/lib/portableExport";
+import { readArchiveBackupStatus } from "@/lib/archiveBackup";
 import { createCachedProbe } from "@/lib/status/cache";
 import { round, runCommand } from "@/lib/status/shared";
 
@@ -282,3 +283,4 @@ export async function collectTimeMachineStatus(): Promise<TimeMachineStatus> {
 }
 
 export const collectPortableExportStatus = readPortableExportStatus;
+export const collectArchiveBackupStatus = readArchiveBackupStatus;

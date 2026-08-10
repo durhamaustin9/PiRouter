@@ -44,6 +44,30 @@ export function ComponentDetailModal({
             </div>
           </div>
 
+          {detail.progress && (
+            <div className="componentProgress">
+              <div>
+                <span>{detail.progress.label}</span>
+                <strong>{detail.progress.value}</strong>
+              </div>
+              <div
+                className="componentProgressTrack"
+                role="progressbar"
+                aria-label={detail.progress.label}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={detail.progress.percent}
+              >
+                <i
+                  style={{
+                    width: `${Math.max(0.35, Math.min(100, detail.progress.percent))}%`,
+                  }}
+                />
+              </div>
+              <small>{detail.progress.detail}</small>
+            </div>
+          )}
+
           <div className="componentMetricGrid">
             {detail.metrics.map((metric) => (
               <div key={`${metric.label}-${metric.value}`}>

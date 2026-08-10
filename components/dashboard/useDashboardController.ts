@@ -53,8 +53,8 @@ export function useDashboardController() {
   );
   const [speedTestStarting, setSpeedTestStarting] = useState(false);
   const [speedModalOpen, setSpeedModalOpen] = useState(false);
-  const [portableExportStarting, setPortableExportStarting] = useState(false);
-  const [portableExportError, setPortableExportError] = useState<string | null>(null);
+  const [archiveBackupStarting, setArchiveBackupStarting] = useState(false);
+  const [archiveBackupError, setArchiveBackupError] = useState<string | null>(null);
   const mountedRef = useRef(true);
   const statusInFlightRef = useRef<Promise<void> | null>(null);
   const historyInFlightRef = useRef<Promise<void> | null>(null);
@@ -70,6 +70,7 @@ export function useDashboardController() {
         const nextStatus = await fetchJson<PiStatus>("/api/status");
         if (!mountedRef.current) return;
         setStatus(nextStatus);
+        setArchiveBackupError(null);
         setError(null);
       } catch (requestError) {
         if (!mountedRef.current) return;
@@ -208,11 +209,11 @@ export function useDashboardController() {
     return request;
   }, [speedTestJob.state]);
 
-  const runPortableExport = useCallback(async () => {
-    setPortableExportStarting(true);
-    setPortableExportError(null);
+  const runArchiveBackup = useCallback(async () => {
+    setArchiveBackupStarting(true);
+    setArchiveBackupError(null);
     try {
-      await fetchJson<{ message: string }>("/api/portable-export", {
+      await fetchJson<{ message: string }>("/api/archive-backup", {
         method: "POST",
       });
       await loadStatus();
@@ -221,13 +222,13 @@ export function useDashboardController() {
       }, 1_000);
     } catch (requestError) {
       if (!mountedRef.current) return;
-      setPortableExportError(
+      setArchiveBackupError(
         requestError instanceof Error
           ? requestError.message
-          : "Unable to request the portable export",
+          : "Unable to start the Unraid archive",
       );
     } finally {
-      if (mountedRef.current) setPortableExportStarting(false);
+      if (mountedRef.current) setArchiveBackupStarting(false);
     }
   }, [loadStatus]);
 
@@ -243,8 +244,8 @@ export function useDashboardController() {
     speedModalOpen,
     setSpeedModalOpen,
     runSpeedTest,
-    portableExportStarting,
-    portableExportError,
-    runPortableExport,
+    archiveBackupStarting,
+    archiveBackupError,
+    runArchiveBackup,
   };
 }

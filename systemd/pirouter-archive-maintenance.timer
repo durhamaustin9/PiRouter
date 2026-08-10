@@ -1,0 +1,10 @@
+[Unit]
+Description=Maintain the Unraid Time Machine archive weekly
+
+[Timer]
+OnCalendar=Sun *-*-* 03:30:00
+Persistent=true
+RandomizedDelaySec=30min
+
+[Install]
+WantedBy=timers.target
