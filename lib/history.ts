@@ -49,9 +49,10 @@ export async function recordSnapshot(status: PiStatus) {
 
 export async function getHistory(limit = 90): Promise<HistoryPoint[]> {
   await ensureDatabase();
+  const safeLimit = Number.isFinite(limit) ? Math.min(360, Math.max(1, Math.trunc(limit))) : 90;
   const rows = await prisma.healthSnapshot.findMany({
     orderBy: { capturedAt: "desc" },
-    take: Math.min(360, Math.max(1, limit)),
+    take: safeLimit,
   });
 
   return rows.reverse().map((row) => ({

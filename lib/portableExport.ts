@@ -2,6 +2,7 @@ import { randomUUID, timingSafeEqual } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type {
+  PortableExportPauseReason,
   PortableExportState,
   PortableExportStatus,
 } from "@/lib/types";
@@ -11,8 +12,21 @@ const STATES = new Set<PortableExportState>([
   "waiting",
   "requested",
   "running",
+  "paused",
   "success",
   "error",
+]);
+const HEARTBEAT_TIMEOUT_MS = 2 * 60_000;
+const SESSION_ENDED_DETAIL = "This export session has ended; the next session will continue";
+const SESSION_CONTINUATION_MESSAGE = "Continuing automatically; saved work is retained";
+const ARCHIVE_CONTINUATION_MESSAGE = "Waiting for archive; resumes automatically";
+const ARCHIVE_HANDOFF_MESSAGES = new Set([
+  "Waiting for Pi archive status; folder progress is saved",
+  "Pi is archiving; folder progress is saved",
+  "Waiting for the Pi archive check; folder progress is saved",
+  "Waiting for the Pi archive window; folder progress is saved",
+  "Waiting to close the idle backup image before archiving",
+  ARCHIVE_CONTINUATION_MESSAGE,
 ]);
 
 let mutationQueue: Promise<unknown> = Promise.resolve();
@@ -44,9 +58,14 @@ function emptyStatus(): PortableExportStatus {
     requestId: null,
     requestedAt: null,
     lastAttemptAt: null,
+    lastHeartbeatAt: null,
     lastSuccessAt: null,
     lastSnapshotName: null,
+    activeSnapshotName: null,
     bytesCopied: null,
+    filesCopied: null,
+    errorDetail: null,
+    pauseReason: null,
   };
 }
 
@@ -60,6 +79,35 @@ function nullableNumber(value: unknown) {
     : null;
 }
 
+function normalizePause(status: PortableExportStatus): PortableExportStatus {
+  if (status.state !== "paused") return { ...status, pauseReason: null };
+  const detail = status.errorDetail?.trim();
+  // Only the exact legacy session-limit detail is routine. A lock, connection,
+  // or data error must remain visible even if a stale reason says otherwise.
+  if (detail && detail !== SESSION_ENDED_DETAIL) {
+    return { ...status, pauseReason: null };
+  }
+  let reason: PortableExportPauseReason | null = null;
+  if (status.pauseReason === "session-budget" || status.pauseReason === "archive-handoff") {
+    reason = status.pauseReason;
+  } else if (detail === SESSION_ENDED_DETAIL ||
+    status.message === SESSION_CONTINUATION_MESSAGE ||
+    status.message === SESSION_ENDED_DETAIL ||
+    status.message === `Export paused; saved work is retained. ${SESSION_ENDED_DETAIL}`) {
+    reason = "session-budget";
+  } else if (ARCHIVE_HANDOFF_MESSAGES.has(status.message)) {
+    reason = "archive-handoff";
+  }
+  return reason ? {
+    ...status,
+    pauseReason: reason,
+    message: reason === "session-budget"
+      ? SESSION_CONTINUATION_MESSAGE
+      : ARCHIVE_CONTINUATION_MESSAGE,
+    errorDetail: null,
+  } : { ...status, pauseReason: null };
+}
+
 function normalizeStatus(value: unknown): PortableExportStatus {
   const fallback = emptyStatus();
   if (!value || typeof value !== "object") return fallback;
@@ -70,7 +118,7 @@ function normalizeStatus(value: unknown): PortableExportStatus {
       ? (parsed.state as PortableExportState)
       : fallback.state;
 
-  return {
+  const status: PortableExportStatus = {
     configured: fallback.configured,
     automatic: fallback.automatic,
     state: fallback.configured ? state : "unconfigured",
@@ -81,10 +129,29 @@ function normalizeStatus(value: unknown): PortableExportStatus {
     requestId: nullableString(parsed.requestId),
     requestedAt: nullableString(parsed.requestedAt),
     lastAttemptAt: nullableString(parsed.lastAttemptAt),
+    lastHeartbeatAt: nullableString(parsed.lastHeartbeatAt),
     lastSuccessAt: nullableString(parsed.lastSuccessAt),
     lastSnapshotName: nullableString(parsed.lastSnapshotName),
+    activeSnapshotName: nullableString(parsed.activeSnapshotName),
     bytesCopied: nullableNumber(parsed.bytesCopied),
+    filesCopied: nullableNumber(parsed.filesCopied),
+    errorDetail: nullableString(parsed.errorDetail),
+    pauseReason: parsed.pauseReason,
+    verified: parsed.verified === true,
   };
+  const heartbeat = Date.parse(status.lastHeartbeatAt ?? status.lastAttemptAt ?? "");
+  if (
+    status.state === "running" &&
+    (!Number.isFinite(heartbeat) || Date.now() - heartbeat > HEARTBEAT_TIMEOUT_MS)
+  ) {
+    return {
+      ...status,
+      state: "paused",
+      message: "Waiting for the Mac exporter; uploaded work is retained",
+      pauseReason: null,
+    };
+  }
+  return normalizePause(status);
 }
 
 export function portableExportAuthorized(authorization: string | null) {
@@ -133,27 +200,43 @@ export async function requestPortableExport(trigger: "automatic" | "manual") {
       return current;
     }
     const now = new Date().toISOString();
+    const resuming =
+      (current.state === "paused" || current.state === "error") &&
+      Boolean(current.requestId);
     return {
       ...current,
       state: "requested",
       message:
-        trigger === "automatic"
+        resuming
+          ? "Export resumed · waiting for the Mac"
+          : trigger === "automatic"
           ? "A new Time Machine snapshot is ready to export"
           : "Export requested · waiting for the Mac",
-      requestId: randomUUID(),
-      requestedAt: now,
+      requestId: resuming ? current.requestId : randomUUID(),
+      requestedAt: resuming ? current.requestedAt ?? now : now,
       lastAttemptAt: now,
-      bytesCopied: null,
+      lastHeartbeatAt: resuming ? current.lastHeartbeatAt : null,
+      activeSnapshotName: resuming ? current.activeSnapshotName : null,
+      bytesCopied: resuming ? current.bytesCopied : null,
+      filesCopied: resuming ? current.filesCopied : null,
+      errorDetail: null,
+      pauseReason: null,
+      verified: false,
     };
   });
 }
 
 export type PortableExportUpdate = {
   requestId: string;
-  state: "running" | "success" | "error";
+  state: "running" | "paused" | "success" | "error";
   message: string;
   lastSnapshotName?: string | null;
+  activeSnapshotName?: string | null;
   bytesCopied?: number | null;
+  filesCopied?: number | null;
+  errorDetail?: string | null;
+  pauseReason?: PortableExportPauseReason | null;
+  verified?: boolean;
 };
 
 export async function updatePortableExport(update: PortableExportUpdate) {
@@ -161,25 +244,49 @@ export async function updatePortableExport(update: PortableExportUpdate) {
     if (!current.requestId || update.requestId !== current.requestId) {
       throw new Error("The portable-export request is no longer active");
     }
-    const completed = update.state === "success" || update.state === "error";
-    return {
+    if (update.state === "success" && update.verified !== true) {
+      throw new Error("A portable export must be verified before it can be marked successful");
+    }
+    for (const value of [update.bytesCopied, update.filesCopied]) {
+      if (value != null && nullableNumber(value) === null) {
+        throw new Error("Portable-export progress must be a finite nonnegative number");
+      }
+    }
+    const completed = update.state === "success";
+    const now = new Date().toISOString();
+    return normalizePause({
       ...current,
       state: update.state,
       message: update.message,
+      errorDetail:
+        update.state === "error" || update.state === "paused"
+          ? nullableString(update.errorDetail)
+          : null,
+      pauseReason: update.pauseReason,
+      verified: completed,
       requestId: completed ? null : current.requestId,
       requestedAt: completed ? null : current.requestedAt,
+      lastAttemptAt:
+        update.state === "running" && current.state !== "running"
+          ? now
+          : current.lastAttemptAt,
+      lastHeartbeatAt:
+        update.state === "running" ? now : current.lastHeartbeatAt,
       lastSuccessAt:
-        update.state === "success"
-          ? new Date().toISOString()
-          : current.lastSuccessAt,
+        completed ? now : current.lastSuccessAt,
       lastSnapshotName:
-        update.state === "success"
-          ? nullableString(update.lastSnapshotName) ?? current.lastSnapshotName
+        completed
+          ? nullableString(update.lastSnapshotName) ??
+            nullableString(update.activeSnapshotName) ??
+            current.activeSnapshotName ??
+            current.lastSnapshotName
           : current.lastSnapshotName,
-      bytesCopied:
-        update.state === "success"
-          ? nullableNumber(update.bytesCopied)
-          : current.bytesCopied,
-    };
+      activeSnapshotName:
+        completed
+          ? null
+          : nullableString(update.activeSnapshotName) ?? current.activeSnapshotName,
+      bytesCopied: nullableNumber(update.bytesCopied) ?? current.bytesCopied,
+      filesCopied: nullableNumber(update.filesCopied) ?? current.filesCopied,
+    });
   });
 }

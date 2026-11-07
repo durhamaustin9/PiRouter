@@ -55,6 +55,7 @@ export function PanelHeading({
           onClick={onSelect}
           aria-label={`Show details for ${label}`}
           aria-haspopup="dialog"
+          title={label}
         >
           {content}
         </UnstyledButton>
@@ -63,7 +64,7 @@ export function PanelHeading({
       )}
       <span className="panelMeta">
         {level && <StateDot level={level} />}
-        {meta}
+        {meta && <span className="panelMetaLabel" title={meta}>{meta}</span>}
       </span>
     </div>
   );
@@ -93,21 +94,35 @@ export function Metric({
   );
 }
 
-export function HistoryBars({ history }: { history: HistoryPoint[] }) {
+export function HistoryBars({ history, metric = "network" }: {
+  history: HistoryPoint[];
+  metric?: "network" | "cpu";
+}) {
   const values = history.slice(-36);
-  const max = Math.max(1, ...values.map((point) => point.downloadBps));
+  const max = metric === "cpu" ? 100 : Math.max(
+    1,
+    ...values.flatMap((point) => [point.downloadBps, point.uploadBps]),
+  );
   return (
-    <div className="historyBars" aria-label="Recent download activity">
+    <div className="historyBars" role="img" aria-label={metric === "cpu" ? "Recent CPU load" : "Recent network activity: green download, blue upload"}>
       {values.length === 0 ? (
         <div className="emptyChart">History begins after the first minute</div>
       ) : (
         values.map((point) => (
-          <div
-            key={point.capturedAt}
-            className="historyBar"
-            style={{ height: `${Math.max(4, (point.downloadBps / max) * 100)}%` }}
-            title={`${formatRate(point.downloadBps)} at ${new Date(point.capturedAt).toLocaleTimeString()}`}
-          />
+          metric === "cpu" ? (
+            <div
+              key={point.capturedAt}
+              className="historyBar"
+              style={{ height: `${Math.max(2, Math.min(100, point.cpuLoadPct))}%` }}
+              title={`${point.cpuLoadPct}% CPU load at ${new Date(point.capturedAt).toLocaleTimeString()}`}
+            />
+          ) : (
+            <div className="historyColumn" key={point.capturedAt}
+              title={`↓ ${formatRate(point.downloadBps)} · ↑ ${formatRate(point.uploadBps)} at ${new Date(point.capturedAt).toLocaleTimeString()}`}>
+              <div className="historyBar" style={{ height: `${Math.max(2, (point.downloadBps / max) * 100)}%` }} />
+              <div className="historyBar upload" style={{ height: `${Math.max(2, (point.uploadBps / max) * 100)}%` }} />
+            </div>
+          )
         ))
       )}
     </div>

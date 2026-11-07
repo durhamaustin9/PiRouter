@@ -1,0 +1,16 @@
+# Vilros three-wire fan: red = physical pin 4 (5V), black = pin 9 (GND),
+# blue = pin 8 (GPIO14). Requires Raspberry Pi OS with pwm-gpio-fan support.
+[pi5]
+# Start at full power during boot, before the thermal driver takes control.
+gpio=14=op,dh
+dtoverlay=pwm-gpio-fan,fan_gpio=14
+# An 80% minimum keeps the fan spinning steadily at lower temperatures.
+# Always run at 80%; use full power at 55 C, returning to 80% below 50 C.
+dtparam=fan_temp0=0,fan_temp0_hyst=0,fan_temp0_speed=204
+dtparam=fan_temp1=55000,fan_temp1_hyst=5000,fan_temp1_speed=255
+# Keep all higher thermal states at full power.
+dtparam=fan_temp2=65000,fan_temp2_hyst=5000,fan_temp2_speed=255
+dtparam=fan_temp3=75000,fan_temp3_hyst=5000,fan_temp3_speed=255
+# Reset parameter scope so later settings address the base device tree.
+dtoverlay=
+[all]

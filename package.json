@@ -10,13 +10,16 @@
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start --hostname 0.0.0.0",
+    "test": "tsx --test tests/*.test.ts && python3 -m unittest discover -s tests -p 'test_*.py'",
     "lint": "eslint . --ignore-pattern .next --ignore-pattern prisma/generated",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "install:pi": "bash scripts/install-pi.sh",
+    "install:kms-relay": "bash scripts/install-kms-relay.sh",
     "install:archive": "bash scripts/install-archive-backup.sh",
     "install:mac-export": "bash scripts/install-portable-export-macos.sh",
+    "build:mac-app": "bash scripts/build-macos-app.sh",
     "postinstall": "prisma generate"
   },
   "dependencies": {

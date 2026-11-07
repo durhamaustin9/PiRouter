@@ -36,6 +36,7 @@ yarn-error.log*
 # PiRouter runtime data
 /data/*.db
 /data/*.db-*
+/data/*.json
 /prisma/generated
 /.secrets/
 /.private/
@@ -49,3 +50,12 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+
+# Local verification caches
+*.tsbuildinfo
+__pycache__/
+
+# Generated enclosure meshes, renders, and print archives
+/enclosure/stl*/
+/enclosure/previews/
+/enclosure/*.zip

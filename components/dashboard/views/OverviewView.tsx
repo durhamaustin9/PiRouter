@@ -143,7 +143,7 @@ export function OverviewView({
             !status.timeMachine.configured
               ? "Setup"
               : status.timeMachine.backupInProgress
-                ? "Writing now"
+                ? "Activity detected"
                 : "Backup share"
           }
           onSelect={() => onShowDetails("time-machine")}
@@ -198,7 +198,7 @@ export function OverviewView({
                   ? `${status.endpoint.latencyMs ?? "—"} ms`
                   : "Route offline"}
             </strong>
-            <span>{status.endpoint.host ?? "Set ENDPOINT_HOST in .env"}</span>
+            <span>{status.endpoint.host ?? "No service endpoint configured"}</span>
           </div>
         </div>
         <p className="panelFoot">{status.endpoint.message}</p>

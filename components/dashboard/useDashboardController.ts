@@ -4,8 +4,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   HistoryPoint,
   PiStatus,
+  PortableExportStatus,
   SpeedTestJobStatus,
   SpeedTestStartResponse,
+  StatusIssue,
 } from "@/lib/types";
 
 const STATUS_INTERVAL_MS = 10_000;
@@ -29,6 +31,7 @@ const INITIAL_SPEED_TEST_JOB: SpeedTestJobStatus = {
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     ...init,
+    signal: init?.signal ?? AbortSignal.timeout(15_000),
     cache: "no-store",
     headers: { accept: "application/json", ...(init?.headers ?? {}) },
   });
@@ -55,25 +58,31 @@ export function useDashboardController() {
   const [speedModalOpen, setSpeedModalOpen] = useState(false);
   const [archiveBackupStarting, setArchiveBackupStarting] = useState(false);
   const [archiveBackupError, setArchiveBackupError] = useState<string | null>(null);
+  const [portableExportStarting, setPortableExportStarting] = useState(false);
+  const [portableExportError, setPortableExportError] = useState<string | null>(null);
   const mountedRef = useRef(true);
   const statusInFlightRef = useRef<Promise<void> | null>(null);
   const historyInFlightRef = useRef<Promise<void> | null>(null);
   const speedStatusInFlightRef = useRef<Promise<void> | null>(null);
   const speedStartInFlightRef = useRef<Promise<void> | null>(null);
+  const archiveStartInFlightRef = useRef(false);
+  const exportStartInFlightRef = useRef(false);
+  const statusVersionRef = useRef(0);
+  const speedVersionRef = useRef(0);
 
   const loadStatus = useCallback((showSpinner = false) => {
     if (statusInFlightRef.current) return statusInFlightRef.current;
     if (showSpinner) setRefreshing(true);
+    const version = statusVersionRef.current;
 
     const request = (async () => {
       try {
         const nextStatus = await fetchJson<PiStatus>("/api/status");
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || version !== statusVersionRef.current) return;
         setStatus(nextStatus);
-        setArchiveBackupError(null);
         setError(null);
       } catch (requestError) {
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || version !== statusVersionRef.current) return;
         setError(
           requestError instanceof Error
             ? requestError.message
@@ -115,11 +124,12 @@ export function useDashboardController() {
 
   const loadSpeedTestStatus = useCallback(() => {
     if (speedStatusInFlightRef.current) return speedStatusInFlightRef.current;
+    const version = speedVersionRef.current;
 
     const request = (async () => {
       try {
         const job = await fetchJson<SpeedTestJobStatus>("/api/speedtest");
-        if (mountedRef.current) setSpeedTestJob(job);
+        if (mountedRef.current && version === speedVersionRef.current) setSpeedTestJob(job);
       } catch {
         // A transient status-poll failure should not hide the running job UI.
       }
@@ -131,12 +141,23 @@ export function useDashboardController() {
     return request;
   }, []);
 
+  const refreshAfterAction = useCallback(async () => {
+    // Wait for any pre-action poll to finish, then request a fresh snapshot.
+    await statusInFlightRef.current;
+    await loadStatus();
+  }, [loadStatus]);
+
   useEffect(() => {
     mountedRef.current = true;
 
     const refreshVisibleData = () => {
       if (document.visibilityState !== "visible") return;
       void loadStatus();
+      void loadSpeedTestStatus();
+    };
+    const refreshAllVisibleData = () => {
+      refreshVisibleData();
+      if (document.visibilityState === "visible") void loadHistory();
     };
     const statusTimer = window.setInterval(
       refreshVisibleData,
@@ -151,14 +172,16 @@ export function useDashboardController() {
       void loadHistory();
       void loadSpeedTestStatus();
     }, 0);
-    document.addEventListener("visibilitychange", refreshVisibleData);
+    document.addEventListener("visibilitychange", refreshAllVisibleData);
+    window.addEventListener("online", refreshAllVisibleData);
 
     return () => {
       mountedRef.current = false;
       window.clearTimeout(initialTimer);
       window.clearInterval(statusTimer);
       window.clearInterval(historyTimer);
-      document.removeEventListener("visibilitychange", refreshVisibleData);
+      document.removeEventListener("visibilitychange", refreshAllVisibleData);
+      window.removeEventListener("online", refreshAllVisibleData);
     };
   }, [loadHistory, loadSpeedTestStatus, loadStatus]);
 
@@ -177,6 +200,7 @@ export function useDashboardController() {
     }
 
     setSpeedTestStarting(true);
+    speedVersionRef.current += 1;
 
     const request = (async () => {
       try {
@@ -184,8 +208,10 @@ export function useDashboardController() {
           "/api/speedtest",
           { method: "POST", signal: AbortSignal.timeout(15_000) },
         );
+        speedVersionRef.current += 1;
         if (mountedRef.current) setSpeedTestJob(response.job);
       } catch (requestError) {
+        speedVersionRef.current += 1;
         if (!mountedRef.current) return;
         const now = new Date().toISOString();
         setSpeedTestJob({
@@ -210,13 +236,17 @@ export function useDashboardController() {
   }, [speedTestJob.state]);
 
   const runArchiveBackup = useCallback(async () => {
+    if (archiveStartInFlightRef.current) return;
+    archiveStartInFlightRef.current = true;
+    statusVersionRef.current += 1;
     setArchiveBackupStarting(true);
     setArchiveBackupError(null);
     try {
       await fetchJson<{ message: string }>("/api/archive-backup", {
         method: "POST",
       });
-      await loadStatus();
+      statusVersionRef.current += 1;
+      await refreshAfterAction();
       window.setTimeout(() => {
         if (mountedRef.current) void loadStatus();
       }, 1_000);
@@ -228,9 +258,48 @@ export function useDashboardController() {
           : "Unable to start the Unraid archive",
       );
     } finally {
+      archiveStartInFlightRef.current = false;
       if (mountedRef.current) setArchiveBackupStarting(false);
     }
-  }, [loadStatus]);
+  }, [loadStatus, refreshAfterAction]);
+
+  const changeIssue = useCallback(async (issue: StatusIssue, hours: number) => {
+    statusVersionRef.current += 1;
+    const nextStatus = await fetchJson<PiStatus>("/api/issues", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: issue.id, firstSeenAt: issue.firstSeenAt, hours }),
+    });
+    statusVersionRef.current += 1;
+    if (mountedRef.current) {
+      setStatus(nextStatus);
+      setError(null);
+    }
+  }, []);
+
+  const runPortableExport = useCallback(async () => {
+    if (exportStartInFlightRef.current) return;
+    exportStartInFlightRef.current = true;
+    statusVersionRef.current += 1;
+    setPortableExportStarting(true);
+    setPortableExportError(null);
+    try {
+      const response = await fetchJson<{ status: PortableExportStatus }>("/api/portable-export", { method: "POST" });
+      statusVersionRef.current += 1;
+      if (mountedRef.current) {
+        setStatus((current) => current ? { ...current, portableExport: response.status } : current);
+        setError(null);
+      }
+      await refreshAfterAction();
+    } catch (error) {
+      if (mountedRef.current) {
+        setPortableExportError(error instanceof Error ? error.message : "Unable to request export");
+      }
+    } finally {
+      exportStartInFlightRef.current = false;
+      if (mountedRef.current) setPortableExportStarting(false);
+    }
+  }, [refreshAfterAction]);
 
   return {
     status,
@@ -247,5 +316,13 @@ export function useDashboardController() {
     archiveBackupStarting,
     archiveBackupError,
     runArchiveBackup,
+    changeIssue,
+    runPortableExport,
+    portableExportStarting,
+    portableExportError,
+    clearActionErrors: () => {
+      setArchiveBackupError(null);
+      setPortableExportError(null);
+    },
   };
 }

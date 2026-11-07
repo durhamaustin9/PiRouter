@@ -31,7 +31,9 @@ export function useTouchScroll(view: DashboardView) {
   const suppressClickUntilRef = useRef(0);
 
   const onPointerDown = useCallback((event: PointerEvent<HTMLElement>) => {
-    if (!event.isPrimary || (event.pointerType === "mouse" && event.button !== 0)) {
+    // Let the browser handle touch/pen scrolling, including gestures that
+    // begin on controls. Custom dragging is only needed for a kiosk mouse.
+    if (!event.isPrimary || event.pointerType !== "mouse" || event.button !== 0) {
       return;
     }
     if (isInteractiveTarget(event.target)) {

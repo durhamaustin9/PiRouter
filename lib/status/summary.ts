@@ -2,6 +2,7 @@ import type {
   ArchiveBackupStatus,
   EndpointStatus,
   NetworkStatus,
+  PortableExportStatus,
   StatusIssue,
   StatusSummary,
   SystemStatus,
@@ -15,6 +16,7 @@ type SummaryInput = {
   endpoint: EndpointStatus;
   timeMachine: TimeMachineStatus;
   archiveBackup: ArchiveBackupStatus;
+  portableExport: PortableExportStatus;
   system: SystemStatus;
 };
 
@@ -24,43 +26,42 @@ export function summarizeStatus({
   endpoint,
   timeMachine,
   archiveBackup,
+  portableExport,
   system,
 }: SummaryInput): { issues: StatusIssue[]; summary: StatusSummary } {
   const issues: StatusIssue[] = [];
-  let score = 100;
 
   if (!network.online) {
-    score -= 50;
     issues.push({
       id: "network",
       level: "critical",
       message: "Internet health check failed",
+      detail: `Health target: ${network.healthTarget}. DNS: ${network.dnsOk ? "responding" : "failed"}. Packet loss: ${network.packetLossPct ?? "unknown"}%.`,
     });
   } else if (
     (network.packetLossPct ?? 0) > 2 ||
     (network.latencyMs ?? 0) > 100
   ) {
-    score -= 12;
     issues.push({
       id: "latency",
       level: "warning",
       message: "Network quality is degraded",
+      detail: `Latency: ${network.latencyMs ?? "unknown"} ms (warning above 100 ms). Packet loss: ${network.packetLossPct ?? "unknown"}% (warning above 2%).`,
     });
   }
 
   if (!tailscale.installed) {
-    score -= 8;
     issues.push({
       id: "tailscale",
       level: "info",
       message: "Tailscale is not installed",
     });
   } else if (!tailscale.online) {
-    score -= 20;
     issues.push({
       id: "tailscale",
       level: "critical",
       message: "Tailscale is offline",
+      detail: `Tailscale backend state: ${tailscale.backendState}.`,
     });
   }
 
@@ -71,11 +72,11 @@ export function summarizeStatus({
       message: "Service endpoint is not configured",
     });
   } else if (!endpoint.reachable) {
-    score -= 20;
     issues.push({
       id: "endpoint",
       level: "critical",
       message: `${endpoint.label} is unreachable`,
+      detail: `TCP target: ${endpoint.host}:${endpoint.port}. ${endpoint.message}.`,
     });
   }
 
@@ -86,55 +87,80 @@ export function summarizeStatus({
       message: "Time Machine path is not configured",
     });
   } else if (timeMachine.status !== "healthy") {
-    score -= timeMachine.status === "critical" ? 20 : 10;
     issues.push({
-      id: "time-machine",
+      id: `time-machine-${timeMachine.reason ?? timeMachine.status}`,
       level: timeMachine.status === "critical" ? "critical" : "warning",
       message: timeMachine.message,
+      detail: `Share: ${timeMachine.path}. Last activity: ${timeMachine.latestActivityAt ?? "none"}. Warning threshold: ${timeMachine.staleAfterHours} hours. SMB service: ${timeMachine.serviceActive === null ? "unknown" : timeMachine.serviceActive ? "running" : "stopped"}.`,
     });
   }
 
   if (archiveBackup.configured && archiveBackup.state === "error") {
-    score -= 8;
     issues.push({
       id: "archive-backup",
       level: "warning",
       message: archiveBackup.message,
+      detail: archiveBackup.errorDetail ?? "See the archive service journal on the Pi for transfer diagnostics.",
+      fingerprint: archiveBackup.errorDetail ?? archiveBackup.message,
+    });
+  }
+
+  if (portableExport.configured && portableExport.state === "error") {
+    issues.push({
+      id: "portable-export",
+      level: "warning",
+      message: portableExport.message,
+      detail: portableExport.errorDetail ?? "The Mac exporter did not complete. Folders ending in .partial are unfinished and must not be treated as completed backups.",
+      fingerprint: portableExport.errorDetail ?? portableExport.message,
     });
   }
 
   if ((system.cpuTempC ?? 0) >= 75) {
-    score -= 15;
     issues.push({
       id: "temperature",
       level: "critical",
       message: "Pi temperature is high",
+      detail: `Measured temperature: ${system.cpuTempC}°C. Critical threshold: 75°C.`,
     });
   } else if ((system.cpuTempC ?? 0) >= 65) {
-    score -= 6;
     issues.push({
       id: "temperature",
       level: "warning",
       message: "Pi is running warm",
+      detail: `Measured temperature: ${system.cpuTempC}°C. Warning threshold: 65°C.`,
     });
   }
   if (system.memoryPct >= 90) {
-    score -= 10;
     issues.push({
       id: "memory",
       level: "warning",
       message: "Memory use is above 90%",
+      detail: `Measured memory use: ${system.memoryPct}%.`,
     });
   }
   if (system.disk.usedPct >= 90) {
-    score -= 15;
     issues.push({
       id: "disk",
       level: "critical",
       message: "SSD use is above 90%",
+      detail: `Storage at ${system.disk.mount} is ${system.disk.usedPct}% full.`,
     });
   }
 
+  for (const issue of issues) {
+    issue.scoreImpact = issue.level === "info" ? 0
+      : issue.id === "network" ? 50
+      : issue.id === "latency" ? 12
+      : issue.id === "temperature" ? (issue.level === "critical" ? 15 : 6)
+      : issue.id === "disk" ? 15
+      : ["archive-backup", "portable-export"].includes(issue.id) ? 8
+      : issue.level === "critical" ? 20 : 10;
+  }
+  return { issues, summary: summarizeIssues(issues) };
+}
+
+export function summarizeIssues(issues: StatusIssue[]): StatusSummary {
+  const score = 100 - issues.reduce((sum, issue) => sum + (issue.scoreImpact ?? 0), 0);
   const visibleIssues = issues.filter((issue) => issue.level !== "info");
   const level = visibleIssues.some((issue) => issue.level === "critical")
     ? "critical"
@@ -146,8 +172,6 @@ export function summarizeStatus({
   const issueCount = visibleIssues.length;
 
   return {
-    issues,
-    summary: {
       score: Math.max(0, score),
       level,
       message:
@@ -158,6 +182,5 @@ export function summarizeStatus({
             : issueCount === 1
               ? "1 item needs attention"
               : `${issueCount} items need attention`,
-    },
   };
 }

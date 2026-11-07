@@ -7,7 +7,8 @@ import {
   collectTailscaleStatus,
   collectTimeMachineStatus,
 } from "@/lib/status/services";
-import { summarizeStatus } from "@/lib/status/summary";
+import { summarizeIssues, summarizeStatus } from "@/lib/status/summary";
+import { reconcileIssues } from "@/lib/status/issues";
 import { collectSystemStatus } from "@/lib/status/system";
 
 export {
@@ -38,14 +39,17 @@ async function collect(): Promise<PiStatus> {
       collectPortableExportStatus(),
       collectSystemStatus(diskPath),
     ]);
-  const { issues, summary } = summarizeStatus({
+  const raw = summarizeStatus({
     network,
     tailscale,
     endpoint,
     timeMachine,
     archiveBackup,
+    portableExport,
     system,
   });
+  const { issues, dismissedIssues } = await reconcileIssues(raw.issues);
+  const summary = summarizeIssues(issues);
 
   return {
     capturedAt: new Date().toISOString(),
@@ -62,6 +66,7 @@ async function collect(): Promise<PiStatus> {
     portableExport,
     system,
     issues,
+    dismissedIssues,
   };
 }
 

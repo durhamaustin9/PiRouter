@@ -17,6 +17,7 @@ import {
 import { useDashboardController } from "@/components/dashboard/useDashboardController";
 import { useTouchScroll } from "@/components/dashboard/useTouchScroll";
 import { ComponentDetailModal } from "@/components/dashboard/ComponentDetailModal";
+import { IssuesModal } from "@/components/dashboard/IssuesModal";
 import {
   buildComponentDetail,
   type ComponentDetailId,
@@ -31,6 +32,11 @@ export function Dashboard() {
   const [componentDetailId, setComponentDetailId] =
     useState<ComponentDetailId | null>(null);
   const [focusMode, setFocusMode] = useState(false);
+  const [issuesOpen, setIssuesOpen] = useState(false);
+  const showDetails = (id: ComponentDetailId) => {
+    if (id === "attention" || id === "overall-health") setIssuesOpen(true);
+    else setComponentDetailId(id);
+  };
   const controller = useDashboardController();
   const { scrollRef, scrollHandlers } = useTouchScroll(view);
 
@@ -69,6 +75,7 @@ export function Dashboard() {
   }
 
   const status = controller.status;
+  const actionError = controller.archiveBackupError ?? controller.portableExportError;
   const componentDetail = componentDetailId
     ? buildComponentDetail(componentDetailId, {
         status,
@@ -86,18 +93,27 @@ export function Dashboard() {
         onRefresh={() => void controller.loadStatus(true)}
         onArchiveBackup={() => void controller.runArchiveBackup()}
         onEnterFocusMode={() => setFocusMode(true)}
+        onShowIssues={() => setIssuesOpen(true)}
+        inert={focusMode}
       />
 
-      {controller.error && (
-        <div className="connectionBanner">
+      {(controller.error || actionError) && (
+        <div className="connectionBanner" role="alert">
           <FontAwesomeIcon icon={faTriangleExclamation} fixedWidth />
-          Showing the last good update · {controller.error}
+          <span>{controller.error
+            ? `Showing the last good update · ${controller.error}`
+            : actionError}</span>
+          {!controller.error && (
+            <Button size="compact-xs" variant="subtle" color="gray" onClick={controller.clearActionErrors}>
+              Dismiss
+            </Button>
+          )}
         </div>
       )}
 
       <main className="dashboardMain" ref={scrollRef} {...scrollHandlers}>
         {view === "overview" && (
-          <OverviewView status={status} onShowDetails={setComponentDetailId} />
+          <OverviewView status={status} onShowDetails={showDetails} />
         )}
         {view === "network" && (
           <NetworkView
@@ -106,7 +122,7 @@ export function Dashboard() {
             onSpeedTest={() => void controller.runSpeedTest()}
             speedTestJob={controller.speedTestJob}
             speedTestStarting={controller.speedTestStarting}
-            onShowDetails={setComponentDetailId}
+            onShowDetails={showDetails}
           />
         )}
         {view === "services" && (
@@ -115,14 +131,17 @@ export function Dashboard() {
             onArchiveBackup={() => void controller.runArchiveBackup()}
             archiveBackupStarting={controller.archiveBackupStarting}
             archiveBackupError={controller.archiveBackupError}
-            onShowDetails={setComponentDetailId}
+            onPortableExport={() => void controller.runPortableExport()}
+            portableExportStarting={controller.portableExportStarting}
+            portableExportError={controller.portableExportError}
+            onShowDetails={showDetails}
           />
         )}
         {view === "system" && (
           <SystemView
             status={status}
             history={controller.history}
-            onShowDetails={setComponentDetailId}
+            onShowDetails={showDetails}
           />
         )}
       </main>
@@ -131,6 +150,7 @@ export function Dashboard() {
         view={view}
         onChange={setView}
         onEnterFocusMode={() => setFocusMode(true)}
+        inert={focusMode}
       />
 
       {focusMode && (
@@ -150,6 +170,7 @@ export function Dashboard() {
         opened={componentDetailId !== null}
         onClose={() => setComponentDetailId(null)}
       />
+      <IssuesModal opened={issuesOpen} onClose={() => setIssuesOpen(false)} status={status} onChange={controller.changeIssue} />
     </div>
   );
 }

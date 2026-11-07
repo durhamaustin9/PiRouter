@@ -28,6 +28,8 @@ import {
   formatPercent,
   formatRate,
   formatUptime,
+  portableExportContinuation,
+  portableExportHeadline,
   portableExportLevel,
   systemLevel,
   timeMachineDisplay,
@@ -162,7 +164,7 @@ export function buildComponentDetail(
         title: "Time Machine",
         kicker: "Backup share activity",
         description:
-          "Shows whether macOS is actively writing to the SMB backup bundle and when files last changed.",
+          "Shows SMB connections and recent file changes on the backup share. macOS reports when a backup completed.",
         icon: faClockRotateLeft,
         level: status.timeMachine.configured
           ? status.timeMachine.status
@@ -176,7 +178,7 @@ export function buildComponentDetail(
           {
             label: "Last file activity",
             value: formatAge(status.timeMachine.latestActivityAt),
-            hint: "File activity is not presented as a completed-backup timestamp.",
+            hint: "File changes can happen after a backup completes; check macOS for the completed-backup time.",
           },
           {
             label: "SMB service",
@@ -194,7 +196,7 @@ export function buildComponentDetail(
             hint: `${formatBytes(status.system.disk.totalBytes - status.system.disk.usedBytes)} remains free.`,
           },
         ],
-        note: "Portable exports use completed, immutable snapshots and never modify this live backup.",
+        note: "Export reads and metadata access may keep the share active after a backup completes. Portable exports use completed, immutable snapshots.",
         updatedAt,
       };
     case "endpoint-route":
@@ -299,7 +301,7 @@ export function buildComponentDetail(
               status.system.cpuTempC === null
                 ? "Unknown"
                 : `${status.system.cpuTempC}°C`,
-            hint: "Thermal throttling begins near 85°C.",
+            hint: "CPU temperature from the Pi's thermal sensor; sustained heat can reduce performance.",
           },
           {
             label: "Memory",
@@ -475,9 +477,11 @@ export function buildComponentDetail(
               detail: `${processedDetail} · updated ${formatAge(archive.progressUpdatedAt)}`,
             }
           : undefined,
-        note: hasLiveProgress
+        note: archive.errorDetail
+          ? `${archive.state === "waiting" && archive.lastSuccessAt ? "The archive is saved. Local data is being kept because: " : ""}${archive.errorDetail}`
+          : (hasLiveProgress
           ? "Processed bytes prove the job is advancing. Restic deduplicates before upload, so they are not the exact number of network bytes sent."
-          : "Interrupted uploads retry from deduplicated chunks. Restoring this archive requires Restic.",
+          : "Interrupted uploads retry from deduplicated chunks. Restoring this archive requires Restic."),
         updatedAt,
       };
     }
@@ -492,7 +496,9 @@ export function buildComponentDetail(
         metrics: [
           {
             label: "Current state",
-            value: displayLevel(status.portableExport.state),
+            value: portableExportContinuation(status.portableExport)
+              ? portableExportHeadline(status.portableExport)
+              : displayLevel(status.portableExport.state),
             hint: status.portableExport.message,
           },
           {
@@ -510,10 +516,20 @@ export function buildComponentDetail(
           {
             label: "Automation",
             value: status.portableExport.automatic ? "Daily" : "Manual",
-            hint: "Daily exports use the newest completed Time Machine snapshot.",
+            hint: "Unfinished exports resume the same saved snapshot before starting a newer one.",
+          },
+          {
+            label: "Saved upload progress",
+            value: status.portableExport.bytesCopied === null ? "Waiting for the exporter" : formatBytes(status.portableExport.bytesCopied),
+            hint: `${(status.portableExport.filesCopied ?? 0).toLocaleString()} files complete on Unraid.`,
+          },
+          {
+            label: "Last exporter contact",
+            value: status.portableExport.lastHeartbeatAt ? formatAge(status.portableExport.lastHeartbeatAt) : "Waiting for the Mac",
+            hint: "The job pauses when contact is lost and resumes when the Mac reconnects.",
           },
         ],
-        note: "Timestamped folders are directly browsable; unchanged files are hard-linked to save space.",
+        note: status.portableExport.errorDetail ?? "Verified upload blocks are retained across disconnects, including inside large files. The completed folder appears after every volume finishes; previous exports are preserved.",
         updatedAt,
       };
     case "attention": {

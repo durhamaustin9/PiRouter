@@ -79,6 +79,8 @@ export async function readArchiveBackupStatus(): Promise<ArchiveBackupStatus> {
         parsed.estimatedSecondsRemaining,
       ),
       progressUpdatedAt: nullableString(parsed.progressUpdatedAt),
+      errorDetail: nullableString(parsed.errorDetail),
+      lastCleanupAt: nullableString(parsed.lastCleanupAt),
     };
   } catch {
     return emptyStatus();

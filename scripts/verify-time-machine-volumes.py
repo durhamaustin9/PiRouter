@@ -125,8 +125,10 @@ def verify_volume(
     shared_progress: Dict[str, Any],
     progress_path: Path,
 ) -> Dict[str, Any]:
+    if not volume_name or Path(volume_name).name != volume_name or volume_name in (".", ".."):
+        raise RuntimeError("Choose a top-level backup volume name")
     root = snapshot / volume_name
-    if not root.is_dir():
+    if root.is_symlink() or not root.is_dir():
         raise RuntimeError(f"Backup volume is missing: {root}")
 
     manifest_path = run_directory / f"{volume_name}.sha256.jsonl"
@@ -247,8 +249,23 @@ def verify_volume(
         "manifestSha256": manifest_digest.hexdigest(),
         "manifestPath": str(manifest_path),
         "errorsPath": str(errors_path),
-        "passed": counts["errors"] == 0,
+        "passed": counts["errors"] == 0 and counts["regularFiles"] > 0,
     }
+
+
+def discover_volumes(snapshot: Path) -> List[str]:
+    """Discover this Mac's volume names without following snapshot symlinks."""
+    volumes = []
+    for entry in sorted_entries(snapshot):
+        if entry.name.startswith("."):
+            continue
+        if entry.is_symlink():
+            raise RuntimeError(f"Backup volume is a link instead of mounted data: {entry.name}")
+        if entry.is_dir(follow_symlinks=False):
+            volumes.append(entry.name)
+    if not volumes:
+        raise RuntimeError("No backed-up volumes were found in this snapshot")
+    return volumes
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -260,14 +277,11 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--report-root",
         default=str(
-            Path.home()
-            / "Library"
-            / "Application Support"
-            / "PiRouter"
+            Path(os.environ.get("PIROUTER_SUPPORT_DIR", str(Path.home() / "Library" / "Application Support" / "PiRouter")))
             / "restore-verification"
         ),
     )
-    parser.add_argument("volumes", nargs="+", help="Top-level backup volume names")
+    parser.add_argument("volumes", nargs="*", help="Top-level backup volume names; defaults to every volume in this Mac's snapshot")
     return parser.parse_args()
 
 
@@ -302,8 +316,10 @@ def main() -> int:
             snapshot, mounted_process = mount_latest_snapshot()
             print(f"VERIFY_MOUNT ready snapshot={snapshot.name}", flush=True)
 
+        volumes = arguments.volumes or discover_volumes(snapshot)
         progress.update({
             "state": "running",
+            "requestedVolumes": volumes,
             "snapshotPath": str(snapshot),
             "snapshotName": snapshot.name,
             "updatedAt": utc_now(),
@@ -311,7 +327,7 @@ def main() -> int:
         atomic_json(progress_path, progress)
 
         volume_results = []
-        for volume_name in arguments.volumes:
+        for volume_name in volumes:
             print(f"VERIFY_VOLUME starting volume={volume_name}", flush=True)
             result = verify_volume(
                 snapshot, volume_name, run_directory, progress, progress_path

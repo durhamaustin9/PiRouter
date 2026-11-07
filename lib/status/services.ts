@@ -103,7 +103,9 @@ export async function collectEndpointStatus(): Promise<EndpointStatus> {
       process.env.ENDPOINT_PORT || "443",
       10,
     );
-    const port = Number.isFinite(parsedPort) ? parsedPort : 443;
+    const port = Number.isInteger(parsedPort) && parsedPort >= 1 && parsedPort <= 65535
+      ? parsedPort
+      : 443;
     if (!host) {
       return {
         configured: false,
@@ -169,7 +171,7 @@ async function serviceActive(service: string) {
   return (await runCommand("systemctl", ["is-active", service], 3_000)) === "active";
 }
 
-async function timeMachineBackupInProgress(
+async function timeMachineShareHasOpenFiles(
   target: string,
 ): Promise<boolean | null> {
   if (process.platform !== "linux") return null;
@@ -194,9 +196,12 @@ async function timeMachineBackupInProgress(
 export async function collectTimeMachineStatus(): Promise<TimeMachineStatus> {
   return getCachedTimeMachine(async () => {
     const target = process.env.TIME_MACHINE_PATH?.trim() || null;
-    const staleAfterHours = Number.parseFloat(
+    const configuredStaleAfterHours = Number.parseFloat(
       process.env.TIME_MACHINE_STALE_HOURS || "36",
     );
+    const staleAfterHours = Number.isFinite(configuredStaleAfterHours) && configuredStaleAfterHours > 0
+      ? configuredStaleAfterHours
+      : 36;
     const service = process.env.TIME_MACHINE_SERVICE?.trim() || "smbd";
     const active = await serviceActive(service);
 
@@ -212,6 +217,7 @@ export async function collectTimeMachineStatus(): Promise<TimeMachineStatus> {
         staleAfterHours,
         status: "unconfigured",
         message: "Add the Time Machine share path",
+        reason: "unconfigured",
       };
     }
 
@@ -224,10 +230,25 @@ export async function collectTimeMachineStatus(): Promise<TimeMachineStatus> {
       exists = false;
     }
 
-    const [latest, shareHasOpenFiles] = exists
+    let listingFailed = false;
+    let bundles: string[] = [];
+    if (exists) {
+      try {
+        bundles = (await fs.readdir(/* turbopackIgnore: true */ target, { withFileTypes: true }))
+          .filter((entry) => entry.isDirectory() && /\.(sparsebundle|backupbundle)$/.test(entry.name))
+          .map((entry) => entry.name);
+      } catch {
+        // A detached drive or permission error must not take down all telemetry,
+        // or be mistaken for an empty share whose archive cleanup succeeded.
+        listingFailed = true;
+      }
+    }
+    const archive = bundles.length === 0 && !listingFailed ? await readArchiveBackupStatus() : null;
+    const cleaned = Boolean(archive?.lastCleanupAt);
+    const [latest, shareHasOpenFiles] = exists && bundles.length > 0
       ? await Promise.all([
           latestModified(target),
-          timeMachineBackupInProgress(target),
+          timeMachineShareHasOpenFiles(target),
         ])
       : [null, null];
     const configuredActiveWindow = Number.parseFloat(
@@ -237,6 +258,8 @@ export async function collectTimeMachineStatus(): Promise<TimeMachineStatus> {
       Number.isFinite(configuredActiveWindow) && configuredActiveWindow > 0
         ? configuredActiveWindow
         : 3;
+    // This is a share-activity hint, not confirmation of a macOS backup session.
+    // Snapshot readers can leave SMB handles open while metadata still changes.
     const backupInProgress =
       shareHasOpenFiles === null
         ? null
@@ -245,20 +268,27 @@ export async function collectTimeMachineStatus(): Promise<TimeMachineStatus> {
           Date.now() - latest <= activeWindowMinutes * 60_000;
     const ageHours = latest ? (Date.now() - latest) / 3_600_000 : null;
     const healthy =
-      exists &&
+      exists && !listingFailed &&
       active !== false &&
       (backupInProgress === true ||
+        (bundles.length === 0 && cleaned) ||
         (ageHours !== null && ageHours <= staleAfterHours));
-    const status = healthy
+    const status = !exists || listingFailed || active === false ? "critical" : healthy
       ? "healthy"
       : exists && ageHours !== null
         ? "warning"
         : "critical";
     let message = "Recent file activity detected";
     if (backupInProgress === true) {
-      message = "Time Machine is writing to the backup share";
+      message = "Backup share has recent changes and an open SMB connection";
     } else if (!exists) {
       message = "Backup path is unavailable";
+    } else if (listingFailed) {
+      message = "Backup path cannot be read";
+    } else if (active === false) {
+      message = "Time Machine SMB service is stopped";
+    } else if (bundles.length === 0 && cleaned) {
+      message = "Previous backup archived; SSD ready for a new backup";
     } else if (ageHours === null) {
       message = "No Time Machine data found";
     } else if (ageHours > staleAfterHours) {
@@ -278,6 +308,7 @@ export async function collectTimeMachineStatus(): Promise<TimeMachineStatus> {
       staleAfterHours,
       status,
       message,
+      reason: healthy ? "healthy" : !exists ? "missing" : listingFailed ? "unreadable" : active === false ? "service" : ageHours === null ? "empty" : ageHours > staleAfterHours ? "stale" : "healthy",
     };
   });
 }

@@ -77,6 +77,8 @@ export function DashboardHeader({
   onRefresh,
   onArchiveBackup,
   onEnterFocusMode,
+  onShowIssues,
+  inert = false,
 }: {
   status: PiStatus;
   refreshing: boolean;
@@ -84,9 +86,14 @@ export function DashboardHeader({
   onRefresh: () => void;
   onArchiveBackup: () => void;
   onEnterFocusMode: () => void;
+  onShowIssues: () => void;
+  inert?: boolean;
 }) {
+  const archiveBusy = archiveBackupStarting ||
+    status.archiveBackup.state === "running" ||
+    status.archiveBackup.state === "maintenance";
   return (
-    <header className="topBar">
+    <header className="topBar" inert={inert} aria-hidden={inert || undefined}>
       <div className="brandBlock">
         <span className="brandMark">
           <FontAwesomeIcon icon={faRoute} fixedWidth />
@@ -96,10 +103,10 @@ export function DashboardHeader({
           <small>{status.identity.location}</small>
         </span>
       </div>
-      <div className={`globalState ${status.summary.level}`}>
+      <UnstyledButton className={`globalState ${status.summary.level}`} onClick={onShowIssues} aria-label="Show alerts and error details" aria-haspopup="dialog">
         <StateDot level={status.summary.level} />
         <span>{status.summary.message}</span>
-      </div>
+      </UnstyledButton>
       <div className="topActions">
         <Clock />
         <Tooltip label="Refresh now">
@@ -113,14 +120,15 @@ export function DashboardHeader({
             <FontAwesomeIcon icon={faArrowsRotate} fixedWidth />
           </ActionIcon>
         </Tooltip>
-        <Tooltip label="Back up to Unraid">
+        <Tooltip label={archiveBusy ? "Archive is in progress" : "Back up to Unraid"}>
           <ActionIcon
             variant="subtle"
             size="xl"
-            aria-label="Back up Time Machine to Unraid"
+            aria-label={archiveBusy ? "Unraid archive in progress" : "Back up Time Machine to Unraid"}
             onClick={onArchiveBackup}
             loading={archiveBackupStarting}
-            disabled={!status.archiveBackup.configured}
+            disabled={!status.archiveBackup.configured || archiveBusy}
+            aria-busy={archiveBusy}
           >
             <FontAwesomeIcon icon={faCloudArrowUp} fixedWidth />
           </ActionIcon>
@@ -145,13 +153,15 @@ export function DashboardNavigation({
   view,
   onChange,
   onEnterFocusMode,
+  inert = false,
 }: {
   view: DashboardView;
   onChange: (view: DashboardView) => void;
   onEnterFocusMode: () => void;
+  inert?: boolean;
 }) {
   return (
-    <nav className="bottomNav" aria-label="Dashboard views">
+    <nav className="bottomNav" aria-label="Dashboard views" inert={inert} aria-hidden={inert || undefined}>
       {NAV_ITEMS.map((item) => (
         <UnstyledButton
           key={item.id}
@@ -222,7 +232,7 @@ export function SpeedTestModal({
       centered
       size="sm"
       closeButtonProps={{ "aria-label": "Close speed test" }}
-      classNames={{ content: "speedModal", header: "speedModalHeader" }}
+      classNames={{ content: "speedModal", header: "speedModalHeader", body: "speedModalBody" }}
     >
       {starting ? (
         <div

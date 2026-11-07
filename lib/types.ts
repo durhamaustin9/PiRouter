@@ -11,6 +11,11 @@ export interface StatusIssue {
   id: string;
   level: IssueLevel;
   message: string;
+  detail?: string;
+  scoreImpact?: number;
+  fingerprint?: string;
+  firstSeenAt?: string;
+  dismissedUntil?: string;
 }
 
 export interface StatusSummary {
@@ -58,12 +63,14 @@ export interface TimeMachineStatus {
   path: string | null;
   exists: boolean;
   serviceActive: boolean | null;
+  /** Server-side share activity; does not confirm a running macOS backup. */
   backupInProgress: boolean | null;
   latestActivityAt: string | null;
   ageHours: number | null;
   staleAfterHours: number;
   status: StatusLevel;
   message: string;
+  reason?: "unconfigured" | "missing" | "unreadable" | "service" | "empty" | "stale" | "healthy";
 }
 
 export type PortableExportState =
@@ -71,8 +78,11 @@ export type PortableExportState =
   | "waiting"
   | "requested"
   | "running"
+  | "paused"
   | "success"
   | "error";
+
+export type PortableExportPauseReason = "session-budget" | "archive-handoff";
 
 export interface PortableExportStatus {
   configured: boolean;
@@ -82,9 +92,15 @@ export interface PortableExportStatus {
   requestId: string | null;
   requestedAt: string | null;
   lastAttemptAt: string | null;
+  lastHeartbeatAt?: string | null;
   lastSuccessAt: string | null;
   lastSnapshotName: string | null;
+  activeSnapshotName?: string | null;
   bytesCopied: number | null;
+  filesCopied?: number | null;
+  errorDetail?: string | null;
+  pauseReason?: PortableExportPauseReason | null;
+  verified?: boolean;
 }
 
 export type ArchiveBackupState =
@@ -113,6 +129,18 @@ export interface ArchiveBackupStatus {
   elapsedSeconds: number | null;
   estimatedSecondsRemaining: number | null;
   progressUpdatedAt: string | null;
+  errorDetail?: string | null;
+  lastCleanupAt?: string | null;
+}
+
+export interface ArchiveCoordination {
+  configured: boolean;
+  state: ArchiveBackupState;
+  lastAttemptAt: string | null;
+  lastSuccessAt: string | null;
+  lastSnapshotId: string | null;
+  serviceActive: boolean | null;
+  needsArchive: boolean | null;
 }
 
 export interface DiskStatus {
@@ -150,6 +178,7 @@ export interface PiStatus {
   portableExport: PortableExportStatus;
   system: SystemStatus;
   issues: StatusIssue[];
+  dismissedIssues: StatusIssue[];
 }
 
 export interface HistoryPoint {

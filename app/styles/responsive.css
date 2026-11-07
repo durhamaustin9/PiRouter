@@ -40,6 +40,7 @@
   .historyPanel,
   .timeMachineDetail,
   .archiveBackupPanel,
+  .portableExportPanel,
   .endpointPanel,
   .tailscalePanel,
   .issuePanel {
@@ -71,5 +72,5 @@
 @media (min-width: 1200px) and (min-height: 700px) {
   .panel { padding: 16px; }
   .panelHeading { margin-bottom: 12px; }
-  .servicesGrid { grid-template-rows: minmax(210px, 1fr) minmax(190px, auto); }
+  .servicesGrid { grid-template-rows: minmax(210px, 1fr) minmax(155px, auto) minmax(190px, auto); }
 }

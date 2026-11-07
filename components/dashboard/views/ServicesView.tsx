@@ -1,4 +1,4 @@
-import { Button } from "@mantine/core";
+import { Button, Loader } from "@mantine/core";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCheck,
@@ -21,6 +21,10 @@ import {
   formatBytes,
   formatDateTime,
   formatPercent,
+  portableExportContinuation,
+  portableExportHeadline,
+  portableExportLevel,
+  portableExportSummary,
   timeMachineDisplay,
 } from "@/components/dashboard/formatters";
 import { Panel, PanelHeading } from "@/components/dashboard/primitives";
@@ -31,17 +35,40 @@ export function ServicesView({
   archiveBackupStarting,
   archiveBackupError,
   onShowDetails,
+  onPortableExport,
+  portableExportStarting,
+  portableExportError,
 }: {
   status: PiStatus;
   onArchiveBackup: () => void;
   archiveBackupStarting: boolean;
   archiveBackupError: string | null;
   onShowDetails: (id: ComponentDetailId) => void;
+  onPortableExport: () => void;
+  portableExportStarting: boolean;
+  portableExportError: string | null;
 }) {
   const timeMachine = timeMachineDisplay(status.timeMachine);
   const archiveProgress = status.archiveBackup.progressPercent;
   const archiveRunning =
     status.archiveBackup.state === "running" && archiveProgress !== null;
+  const exportContinuation = portableExportContinuation(status.portableExport);
+  const archiveActive = ["running", "maintenance"].includes(status.archiveBackup.state);
+  const archiveActionLabel = status.archiveBackup.state === "maintenance"
+    ? "Archive maintenance"
+    : archiveActive ? "Archive in progress" : "Back up to Unraid";
+  const exportActive = ["running", "requested"].includes(status.portableExport.state);
+  const exportActionLabel = exportContinuation === "archive-handoff"
+    ? "Resumes after archive"
+    : exportContinuation === "session-budget"
+      ? "Continuing automatically"
+      : status.portableExport.state === "running"
+        ? "Export in progress"
+        : status.portableExport.state === "requested"
+          ? "Waiting for Mac"
+          : status.portableExport.state === "paused"
+            ? "Resume export"
+            : "Export files to Unraid";
 
   return (
     <section className="detailGrid servicesGrid" aria-label="Service details">
@@ -96,7 +123,7 @@ export function ServicesView({
               {status.timeMachine.backupInProgress === null
                 ? "Unknown"
                 : status.timeMachine.backupInProgress
-                  ? "Writing"
+                  ? "Detected"
                   : "Idle"}
             </strong>
           </div>
@@ -140,18 +167,37 @@ export function ServicesView({
         )}
         <Button
           className="backupButton"
-          leftSection={<FontAwesomeIcon icon={faCloudArrowUp} fixedWidth />}
+          leftSection={archiveActive ? <Loader size={12} color="var(--good)" /> : <FontAwesomeIcon icon={faCloudArrowUp} fixedWidth />}
           onClick={onArchiveBackup}
-          loading={
-            archiveBackupStarting ||
-            status.archiveBackup.state === "running" ||
-            status.archiveBackup.state === "maintenance"
-          }
-          disabled={!status.archiveBackup.configured}
+          loading={archiveBackupStarting}
+          disabled={!status.archiveBackup.configured || archiveActive}
+          aria-label={archiveActionLabel}
+          aria-busy={archiveBackupStarting || archiveActive}
           color="teal"
           fullWidth
         >
-          Back up to Unraid
+          {archiveActionLabel}
+        </Button>
+      </Panel>
+
+      <Panel className="portableExportPanel">
+        <PanelHeading icon={faCloudArrowUp} label="Browsable exports" level={portableExportLevel(status.portableExport)} onSelect={() => onShowDetails("portable-export")} />
+        <div className="serviceHero compact"><FontAwesomeIcon icon={faDatabase} fixedWidth /><div>
+          <strong>{portableExportHeadline(status.portableExport)}</strong>
+          <span>{portableExportError ?? portableExportSummary(status.portableExport)}</span>
+        </div></div>
+        {status.portableExport.bytesCopied !== null && <div className="inlineFacts"><span>{formatBytes(status.portableExport.bytesCopied)} retained on Unraid</span><span>{(status.portableExport.filesCopied ?? 0).toLocaleString()} files complete</span></div>}
+        <Button
+          color="teal"
+          fullWidth
+          onClick={onPortableExport}
+          loading={portableExportStarting}
+          leftSection={status.portableExport.state === "running" ? <Loader size={12} color="var(--good)" /> : undefined}
+          disabled={!status.portableExport.configured || exportActive || exportContinuation !== null}
+          aria-label={exportActionLabel}
+          aria-busy={portableExportStarting || status.portableExport.state === "running"}
+        >
+          {exportActionLabel}
         </Button>
       </Panel>
 

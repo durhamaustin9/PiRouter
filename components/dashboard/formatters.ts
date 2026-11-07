@@ -72,8 +72,8 @@ export function formatAge(date: string | null) {
 export function timeMachineDisplay(status: TimeMachineStatus) {
   if (status.backupInProgress) {
     return {
-      headline: "Backup in progress",
-      detail: "Time Machine is writing to this device",
+      headline: "Share activity",
+      detail: "Recent changes with an open connection",
     };
   }
   if (!status.configured) {
@@ -83,10 +83,10 @@ export function timeMachineDisplay(status: TimeMachineStatus) {
     return { headline: "Share unavailable", detail: status.message };
   }
   if (!status.latestActivityAt) {
-    return { headline: "No backup data", detail: status.message };
+    return { headline: status.status === "healthy" ? "Ready for a new backup" : "No backup data", detail: status.message };
   }
   return {
-    headline: "Share idle",
+    headline: status.backupInProgress === null ? "Activity unknown" : "Share idle",
     detail: `Last file activity ${formatAge(status.latestActivityAt)}`,
   };
 }
@@ -118,10 +118,41 @@ export function systemLevel(system: SystemStatus): StatusLevel {
   return "healthy";
 }
 
+export function portableExportContinuation(status: PortableExportStatus) {
+  if (status.state !== "paused" || status.errorDetail?.trim()) return null;
+  return status.pauseReason === "session-budget" || status.pauseReason === "archive-handoff"
+    ? status.pauseReason
+    : null;
+}
+
+export function portableExportHeadline(status: PortableExportStatus) {
+  const continuation = portableExportContinuation(status);
+  if (continuation === "session-budget") return "Continuing automatically";
+  if (continuation === "archive-handoff") return "Waiting for archive; resumes automatically";
+  if (status.state === "paused") return "Paused · progress saved";
+  if (status.state === "running") return "Export in progress";
+  return formatDateTime(status.lastSuccessAt);
+}
+
+export function portableExportSummary(status: PortableExportStatus) {
+  if (status.message === "Uploading 1 backed-up files and folders together") {
+    return "Uploading a backed-up file or folder";
+  }
+  const prefixes = ["Uploading backed-up files: ", "Scanning backed-up folders: "];
+  for (const prefix of prefixes) {
+    if (!status.message.startsWith(prefix)) continue;
+    const path = status.message.slice(prefix.length);
+    const name = path.split("/").filter(Boolean).at(-1);
+    return name ? `${prefix}${name}` : status.message;
+  }
+  return status.message;
+}
+
 export function portableExportLevel(status: PortableExportStatus): StatusLevel {
   if (!status.configured) return "unconfigured";
   if (status.state === "error") return "critical";
-  if (status.state === "requested" || status.state === "running") {
+  if (portableExportContinuation(status)) return "healthy";
+  if (status.state === "requested" || status.state === "running" || status.state === "paused") {
     return "warning";
   }
   return "healthy";

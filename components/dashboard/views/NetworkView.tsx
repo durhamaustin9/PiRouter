@@ -65,6 +65,7 @@ export function NetworkView({
           </div>
         </div>
         <HistoryBars history={history} />
+        <p className="panelFoot historyFoot"><span className="downloadLegend">↓ Download</span> · <span className="uploadLegend">↑ Upload</span></p>
       </Panel>
 
       <Panel className="linkHealthPanel">

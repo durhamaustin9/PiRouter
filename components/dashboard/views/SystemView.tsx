@@ -80,7 +80,7 @@ export function SystemView({
             icon={faTemperatureHalf}
             label="Thermal"
             value={temperaturePercent}
-            detail="85°C throttle point"
+            detail="85°C gauge limit"
             color={temperaturePercent > 82 ? "orange" : "teal"}
           />
         </div>
@@ -90,7 +90,7 @@ export function SystemView({
         <PanelHeading
           icon={faHardDrive}
           label="SSD storage"
-          level={status.system.disk.usedPct > 90 ? "critical" : "healthy"}
+          level={status.system.disk.usedPct >= 90 ? "critical" : "healthy"}
           meta={status.system.disk.mount}
           onSelect={() => onShowDetails("ssd-storage")}
         />
@@ -104,7 +104,7 @@ export function SystemView({
         </div>
         <Progress
           value={status.system.disk.usedPct}
-          color={status.system.disk.usedPct > 90 ? "red" : "teal"}
+          color={status.system.disk.usedPct >= 90 ? "red" : "teal"}
           size="lg"
           radius="xl"
         />
@@ -122,8 +122,8 @@ export function SystemView({
           meta={`${history.length} samples`}
           onSelect={() => onShowDetails("health-history")}
         />
-        <HistoryBars history={history} />
-        <p className="panelFoot historyFoot">Stored locally · 7-day retention</p>
+        <HistoryBars history={history} metric="cpu" />
+        <p className="panelFoot historyFoot">CPU load · Stored locally · 7-day retention</p>
       </Panel>
     </section>
   );
