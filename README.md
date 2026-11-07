@@ -287,9 +287,11 @@ Every backed-up volume must contain readable files, and all discovered entries m
 ### Mac application and installer
 
 PiRouter Exporter supports **macOS 13 or later on Apple Silicon and Intel**. Open
-`PiRouter-Exporter-3.0.dmg`, quit an existing PiRouter Exporter, drag the app to
+`PiRouter-Exporter-3.0.1.dmg`, quit an existing PiRouter Exporter, drag the app to
 **Applications**, and open it there. The app includes a private Python runtime;
 other Macs do not need Xcode, Command Line Tools, or a separate Python install.
+Version 3.0.1 requires native execution for both the app and its private runtime:
+Apple Silicon uses arm64 and Intel Macs use x86_64, without Rosetta.
 
 First-run setup asks for the PiRouter address. The dashboard needs only that
 address. It prefers a saved direct local-network address and falls back to the

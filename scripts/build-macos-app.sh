@@ -9,8 +9,8 @@ fi
 project_dir="${PIROUTER_SOURCE_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 build_dir="${PIROUTER_BUILD_DIR:-$project_dir/dist/macos}"
 app_output="${PIROUTER_APP_OUTPUT:-$build_dir/PiRouter Exporter.app}"
-version="${PIROUTER_APP_VERSION:-3.0}"
-build_number="${PIROUTER_APP_BUILD:-3}"
+version="${PIROUTER_APP_VERSION:-3.0.1}"
+build_number="${PIROUTER_APP_BUILD:-4}"
 build_dmg="${PIROUTER_BUILD_DMG:-true}"
 dmg_output="${PIROUTER_DMG_OUTPUT:-$build_dir/PiRouter-Exporter-$version.dmg}"
 identity="${PIROUTER_CODE_SIGN_IDENTITY:-}"
@@ -66,14 +66,23 @@ ditto "$framework_source" "$contents/Frameworks/Python.framework"
 python_home="$contents/Frameworks/Python.framework/Versions/Current"
 python_bin="$python_home/bin/python3"
 [[ -x "$python_bin" ]] || { echo "The private Python interpreter is missing." >&2; exit 1; }
+python3 - "$python_home/Resources/Python.app/Contents/Info.plist" <<'PY'
+from pathlib import Path
+import plistlib, sys
+path = Path(sys.argv[1])
+metadata = plistlib.loads(path.read_bytes())
+metadata.update(LSRequiresNativeExecution=True, LSArchitecturePriority=['arm64', 'x86_64'])
+path.write_bytes(plistlib.dumps(metadata))
+PY
 for architecture in arm64 x86_64; do lipo "$python_bin" -verify_arch "$architecture"; done
-PYTHONHOME="$python_home" PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1 "$python_bin" -c \
-  'import ctypes, hashlib, lzma, sqlite3, ssl, sys, zlib; assert sys.version_info >= (3, 10); assert sqlite3.sqlite_version; print("Private Python runtime verified")'
 
 sdk="$(xcrun --show-sdk-path)"
 # Both architecture slices must come from the same immutable source revision,
 # even if another developer edits the launcher during a long package build.
 cp "$project_dir/scripts/portable-export-launcher.swift" "$work_dir/launcher.swift"
+grep -Fq -- '"--runtime-check"' "$work_dir/launcher.swift" || {
+  echo "The native launcher is missing its runtime compatibility check." >&2; exit 1;
+}
 for architecture in arm64 x86_64; do
   xcrun swiftc -O -target "$architecture-apple-macosx13.0" -sdk "$sdk" \
     -framework AppKit -framework WebKit \
@@ -100,6 +109,8 @@ metadata = {
     'CFBundleSupportedPlatforms': ['MacOSX'],
     'LSApplicationCategoryType': 'public.app-category.utilities',
     'LSMinimumSystemVersion': '13.0',
+    'LSRequiresNativeExecution': True,
+    'LSArchitecturePriority': ['arm64', 'x86_64'],
     'NSHighResolutionCapable': True,
     'NSLocalNetworkUsageDescription': 'PiRouter connects to your Pi to show its dashboard and coordinate optional backup exports.',
     'NSAppTransportSecurity': {
@@ -129,6 +140,32 @@ codesign "${sign_options[@]}" --identifier local.pirouter.portable-export \
   "$app"
 codesign --verify --deep --strict "$app"
 
+# Validate cached/overridden frameworks as rigorously as newly downloaded ones.
+# Normalize and sign metadata first, so the interpreter is never executed with
+# an invalidated nested application seal.
+python3 "$project_dir/scripts/bundle-python-runtime-macos.py" \
+  --validate --output "$contents/Frameworks/Python.framework"
+if [[ "$(/usr/sbin/sysctl -n hw.optional.arm64 2>/dev/null || true)" == 1 ]]; then
+  native_arch=arm64
+else
+  native_arch=x86_64
+fi
+PYTHONHOME="$python_home" PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1 "$python_bin" - "$native_arch" <<'PY'
+import ctypes, errno, hashlib, lzma, platform, sqlite3, ssl, sys, zlib
+assert sys.version_info >= (3, 10)
+translated = ctypes.c_int(0)
+size = ctypes.c_size_t(ctypes.sizeof(translated))
+libc = ctypes.CDLL(None, use_errno=True)
+result = libc.sysctlbyname(b'sysctl.proc_translated', ctypes.byref(translated), ctypes.byref(size), None, 0)
+if result and ctypes.get_errno() != errno.ENOENT:
+    raise RuntimeError('Could not verify native Python execution')
+if translated.value or platform.machine() != sys.argv[1]:
+    raise RuntimeError('Private Python must run natively, without Rosetta translation')
+assert sqlite3.sqlite_version
+print('Private Python runtime verified: native ' + platform.machine())
+PY
+"$contents/MacOS/PiRouterExporter" --runtime-check
+
 cat > "$work_dir/Install Readme.txt" <<'HELP'
 PiRouter Exporter
 macOS 13 or later • Apple Silicon and Intel
@@ -144,6 +181,7 @@ credentials. Optional Time Machine exports need that Mac's own pairing token,
 SSH destination/key, and Full Disk Access. No account details or SSH keys are
 included in this installer. The app includes its own private Python runtime;
 Xcode and a separate Python installation are not required.
+The app and its private runtime run natively on each Mac; Rosetta is not required.
 
 Your existing settings and resumable upload progress remain in your user
 Library when replacing the application. The destination for new export setups
@@ -201,6 +239,7 @@ manifest = {
     'architectures': ['arm64', 'x86_64'],
     'minimumMacOS': '13.0',
     'bundledPython': True,
+    'requiresNativeExecution': True,
     'signing': 'ad-hoc' if sys.argv[5] == '-' else 'Developer ID',
     'notarized': False,
     'launcherSHA256': hashlib.sha256((app/'Contents/MacOS/PiRouterExporter').read_bytes()).hexdigest(),

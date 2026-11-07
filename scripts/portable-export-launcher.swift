@@ -256,7 +256,7 @@ private func runBundledScript(_ name: String, python: Bool = false) -> Int32 {
   return process.terminationReason == .exit ? process.terminationStatus : 128 + process.terminationStatus
 }
 
-private func runCommand(_ path: String, _ arguments: [String], timeout: TimeInterval = 15, capture: Bool = false) throws -> (Int32, String) {
+private func runCommand(_ path: String, _ arguments: [String], timeout: TimeInterval = 15, capture: Bool = false, environment: [String: String]? = nil) throws -> (Int32, String) {
   let process = Process()
   let temporary = FileManager.default.temporaryDirectory.appendingPathComponent("pirouter-command-" + UUID().uuidString)
   var captureHandle: FileHandle?
@@ -268,6 +268,7 @@ private func runCommand(_ path: String, _ arguments: [String], timeout: TimeInte
   }
   defer { try? captureHandle?.close(); if capture { try? FileManager.default.removeItem(at: temporary) } }
   process.executableURL = URL(fileURLWithPath: path); process.arguments = arguments
+  if let environment { process.environment = environment }
   process.standardInput = FileHandle.nullDevice
   // A private file avoids pipe back-pressure when an SSH relay writes diagnostics.
   process.standardOutput = captureHandle ?? FileHandle.nullDevice
@@ -291,6 +292,79 @@ private func runCommand(_ path: String, _ arguments: [String], timeout: TimeInte
   var text = ""
   if let captureHandle { try captureHandle.seek(toOffset: 0); text = String(decoding: try captureHandle.read(upToCount: 65_536) ?? Data(), as: UTF8.self) }
   return (process.terminationStatus, text)
+}
+
+private func processTranslationState() -> Int32? {
+  var translated: Int32 = 0
+  var size = MemoryLayout<Int32>.size
+  if sysctlbyname("sysctl.proc_translated", &translated, &size, nil, 0) == 0 { return translated }
+  return errno == ENOENT ? 0 : nil
+}
+
+private func nativeHardwareArchitecture() -> String? {
+  var arm64: Int32 = 0
+  var size = MemoryLayout<Int32>.size
+  if sysctlbyname("hw.optional.arm64", &arm64, &size, nil, 0) == 0 { return arm64 == 1 ? "arm64" : "x86_64" }
+  var cpu: Int32 = 0
+  size = MemoryLayout<Int32>.size
+  guard sysctlbyname("hw.cputype", &cpu, &size, nil, 0) == 0 else { return nil }
+  if cpu == CPU_TYPE_ARM64 { return "arm64" }
+  if cpu == CPU_TYPE_X86_64 { return "x86_64" }
+  return nil
+}
+
+// This diagnostic never loads configuration, opens a window, or starts exports.
+// Query each process itself: a universal binary's available slices alone do not
+// establish which architecture macOS actually selected at runtime.
+private func runRuntimeCheck() -> Int32 {
+  #if arch(arm64)
+  let architecture = "arm64"
+  #elseif arch(x86_64)
+  let architecture = "x86_64"
+  #else
+  let architecture = "unknown"
+  #endif
+  let hardware = nativeHardwareArchitecture()
+  let translated = processTranslationState()
+  var errors: [String] = []
+  if hardware == nil { errors.append("The native hardware architecture could not be determined.") }
+  if translated == nil { errors.append("The launcher's translation state could not be determined.") }
+  else if translated != 0 { errors.append("The launcher is running under translation. Reopen the native PiRouter Exporter app.") }
+  if hardware != architecture { errors.append("The launcher architecture does not match the native hardware.") }
+  var python: Any = NSNull()
+  let executable = Bundle.main.privateFrameworksURL?.appendingPathComponent("Python.framework/Versions/Current/bin/python3")
+  if let executable, FileManager.default.isExecutableFile(atPath: executable.path) {
+    let code = """
+import ctypes, errno, json, platform, sys
+libc = ctypes.CDLL(None, use_errno=True)
+libc.sysctlbyname.argtypes = [ctypes.c_char_p, ctypes.c_void_p, ctypes.POINTER(ctypes.c_size_t), ctypes.c_void_p, ctypes.c_size_t]
+libc.sysctlbyname.restype = ctypes.c_int
+value = ctypes.c_int(0)
+size = ctypes.c_size_t(ctypes.sizeof(value))
+result = libc.sysctlbyname(b'sysctl.proc_translated', ctypes.byref(value), ctypes.byref(size), None, 0)
+translated = bool(value.value) if result == 0 else (False if ctypes.get_errno() == errno.ENOENT else None)
+print(json.dumps({'architecture': platform.machine(), 'translated': translated, 'executable': sys.executable}))
+sys.exit(0 if translated is not None else 1)
+"""
+    do {
+      let result = try runCommand(executable.path, ["-c", code], timeout: 10, capture: true, environment: runtimeEnvironment())
+      guard result.0 == 0, let data = result.1.data(using: .utf8), let report = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+        throw AppFailure("The bundled Python runtime did not return a valid architecture report.")
+      }
+      python = report
+      if report["translated"] as? Bool != false { errors.append("The bundled Python runtime is translated or its translation state is unknown.") }
+      if report["architecture"] as? String != hardware { errors.append("The bundled Python architecture does not match the native hardware.") }
+    } catch { errors.append(error.localizedDescription) }
+  } else { errors.append("The bundled Python runtime is missing or is not executable.") }
+  let report: [String: Any] = [
+    "ok": errors.isEmpty, "hardware_architecture": hardware ?? "unknown",
+    "launcher": ["architecture": architecture, "translated": translated.map { $0 != 0 } as Any? ?? NSNull()],
+    "python": python, "errors": errors,
+  ]
+  if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
+    FileHandle.standardOutput.write(data); FileHandle.standardOutput.write(Data("\n".utf8))
+  }
+  return errors.isEmpty ? 0 : 1
 }
 
 private enum BackgroundExporter {
@@ -841,6 +915,7 @@ private func runSelfTests() -> Int32 {
   } catch { FileHandle.standardError.write(Data((error.localizedDescription + "\n").utf8)); return 1 }
 }
 
+if CommandLine.arguments.contains("--runtime-check") { exit(runRuntimeCheck()) }
 if CommandLine.arguments.contains("--self-test") { exit(runSelfTests()) }
 if CommandLine.arguments.contains("--background") { exit(runBundledScript("portable-export-macos.sh")) }
 if CommandLine.arguments.contains("--verify-volumes") { exit(runBundledScript("verify-time-machine-volumes.py", python: true)) }

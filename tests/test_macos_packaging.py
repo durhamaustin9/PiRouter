@@ -205,7 +205,16 @@ class MacDistributionAssembly(unittest.TestCase):
                      'portable-export-mounts.py', 'resumable-portable-export.py',
                      'portable-export-receiver.php'):
             (scripts / name).write_text('resource fixture')
-        (scripts / 'portable-export-launcher.swift').write_text('immutable launcher fixture')
+        (scripts / 'portable-export-launcher.swift').write_text('immutable launcher fixture // "--runtime-check"')
+        (scripts / 'bundle-python-runtime-macos.py').write_text('''import os, pathlib, plistlib, sys
+assert sys.argv[1:3]==['--validate','--output']
+root=pathlib.Path(sys.argv[3])
+metadata=plistlib.loads((root/'Versions/Current/Resources/Python.app/Contents/Info.plist').read_bytes())
+assert metadata['LSRequiresNativeExecution'] is True
+assert metadata['LSArchitecturePriority']==['arm64','x86_64']
+pathlib.Path(os.environ['TEST_RUNTIME_AUDIT_LOG']).write_text(str(root))
+if os.environ.get('TEST_RUNTIME_AUDIT_FAIL'): raise SystemExit('Runtime is not universal2: missing arm64')
+''')
         (scripts / 'portable-export.env').write_text('token must never ship')
         (scripts / 'id_ed25519').write_text('key must never ship')
         (self.source / 'assets').mkdir()
@@ -214,14 +223,23 @@ class MacDistributionAssembly(unittest.TestCase):
         binary = self.framework / 'Versions/Current/bin/python3'
         binary.parent.mkdir(parents=True)
         StagedMacInstaller.write_executable(binary,
-            '#!/bin/bash\nunset PYTHONHOME\nif [[ "$1" == -c ]]; then exit 0; fi\nexec "$TEST_PYTHON" "$@"\n')
+            '#!/bin/bash\nunset PYTHONHOME\nif [[ "$1" == - && "$#" == 2 ]]; then exit "${TEST_PYTHON_TRANSLATED_FAIL:-0}"; fi\nexec "$TEST_PYTHON" "$@"\n')
+        self.runtime_info = self.framework / 'Versions/Current/Resources/Python.app/Contents/Info.plist'
+        self.runtime_info.parent.mkdir(parents=True)
+        self.runtime_info.write_bytes(plistlib.dumps({
+            'CFBundleIdentifier': 'org.python.python',
+            'LSRequiresNativeExecution': False,
+            'LSArchitecturePriority': ['x86_64', 'arm64'],
+            'KeepRuntimeMetadata': 'preserved',
+        }))
         self.tools = self.root / 'tools'
         self.tools.mkdir()
         self.write_tool('xcrun', r'''import json, os, pathlib, sys
 args=sys.argv[1:]
 if args==['--show-sdk-path']: print('/fixture/SDK'); raise SystemExit(0)
 output=pathlib.Path(args[args.index('-o')+1]); source=pathlib.Path(args[-3])
-output.write_text(source.read_text())
+output.write_text('#!/bin/bash\n# '+source.read_text()+'\nexit "${TEST_NATIVE_CHECK_FAIL:-0}"\n')
+output.chmod(0o755)
 with open(os.environ['TEST_BUILD_LOG'],'a') as log: log.write(json.dumps(args)+'\n')
 if os.environ.get('TEST_MUTATE_SOURCE'):
  pathlib.Path(os.environ['TEST_MUTATE_SOURCE']).write_text('edited source after first slice')
@@ -230,6 +248,7 @@ if os.environ.get('TEST_MUTATE_SOURCE'):
 args=sys.argv[1:]
 if '-create' in args:
  pathlib.Path(args[args.index('-output')+1]).write_text(pathlib.Path(args[1]).read_text()+'\n'+pathlib.Path(args[2]).read_text())
+ pathlib.Path(args[args.index('-output')+1]).chmod(0o755)
 ''')
         self.write_tool('codesign', 'pass\n')
         self.write_tool('security', 'pass\n')
@@ -249,6 +268,7 @@ if args[0]=='create':
             'PIROUTER_CODE_SIGN_IDENTITY': '-', 'TEST_PYTHON': sys.executable,
             'TEST_BUILD_LOG': str(self.root / 'build.log'),
             'TEST_DMG_CONTENTS': str(self.root / 'dmg.json'),
+            'TEST_RUNTIME_AUDIT_LOG': str(self.root / 'runtime-audit.log'),
         }
         self.environment.pop('PIROUTER_APP_OUTPUT', None)
         self.environment.pop('PIROUTER_DMG_OUTPUT', None)
@@ -269,6 +289,18 @@ if args[0]=='create':
         info = plistlib.loads((app/'Contents/Info.plist').read_bytes())
         self.assertEqual(info['LSMinimumSystemVersion'], '13.0')
         self.assertEqual(info['CFBundleIdentifier'], 'local.pirouter.portable-export')
+        self.assertTrue(info['LSRequiresNativeExecution'])
+        self.assertEqual(info['LSArchitecturePriority'], ['arm64', 'x86_64'])
+        self.assertEqual(info['CFBundleShortVersionString'], '3.0.1')
+        self.assertEqual(info['CFBundleVersion'], '4')
+        nested = plistlib.loads((app/'Contents/Frameworks/Python.framework/Versions/Current/Resources/Python.app/Contents/Info.plist').read_bytes())
+        self.assertTrue(nested['LSRequiresNativeExecution'])
+        self.assertEqual(nested['LSArchitecturePriority'], ['arm64', 'x86_64'])
+        self.assertEqual(nested['KeepRuntimeMetadata'], 'preserved')
+        self.assertFalse(plistlib.loads(self.runtime_info.read_bytes())['LSRequiresNativeExecution'])
+        audit_path = (self.root/'runtime-audit.log').read_text()
+        self.assertIn('.build.', audit_path)
+        self.assertIn('Contents/Frameworks/Python.framework', audit_path)
         launcher = (app/'Contents/MacOS/PiRouterExporter').read_text()
         self.assertEqual(launcher.count('immutable launcher fixture'), 2)
         self.assertNotIn('edited source', launcher)
@@ -285,13 +317,27 @@ if args[0]=='create':
         self.assertEqual(manifest['architectures'], ['arm64', 'x86_64'])
         self.assertEqual(manifest['signing'], 'ad-hoc')
         self.assertFalse(manifest['notarized'])
+        self.assertTrue(manifest['requiresNativeExecution'])
+
+    def test_runtime_audit_rejects_an_overridden_framework_missing_arm64(self):
+        result = self.build(TEST_RUNTIME_AUDIT_FAIL='1')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('missing arm64', result.stderr)
+        self.assertFalse((self.output/'PiRouter Exporter.app').exists())
+
+    def test_translated_python_or_launcher_fails_before_publication(self):
+        for variable in ['TEST_PYTHON_TRANSLATED_FAIL', 'TEST_NATIVE_CHECK_FAIL']:
+            with self.subTest(variable=variable):
+                result = self.build(**{variable: '67'})
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse((self.output/'PiRouter Exporter.app').exists())
 
     def test_failed_image_creation_preserves_previous_distributables(self):
         self.output.mkdir()
         app = self.output/'PiRouter Exporter.app'
         app.mkdir()
         (app/'old-release').write_text('old app')
-        image = self.output/'PiRouter-Exporter-3.0.dmg'
+        image = self.output/'PiRouter-Exporter-3.0.1.dmg'
         image.write_bytes(b'old disk image')
         result = self.build(TEST_DMG_FAIL='1')
         self.assertNotEqual(result.returncode, 0)
